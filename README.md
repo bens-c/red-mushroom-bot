@@ -67,7 +67,7 @@ Configure `ticket_category`, `transcript_channel`, and `support_role` with `/con
 - Use `/sticky set` in a channel to create a persistent message. It reposts after activity while deleting its previous copy.
 - Use `/reaction-role add` with an existing message ID, channel, emoji, and role. The bot role must be above every self-assignable role.
 - Use `/automod` to manage Discord-native keyword, spam, and mention-spam rules. This works without the privileged Message Content intent.
-- Configure the welcome channel and autorole with `/config set-channel` and `/config set-role`, customize `welcome_message` and `leave_message`, then enable the welcome module with `/config set-option`.
+- Configure the autorole with `/config set-role`; it is assigned on join independently of welcome messages. Use `/community autorole-test` to verify permissions and role hierarchy. Configure the welcome channel with `/config set-channel`, customize the messages, then enable welcome messages with `/config set-option`.
 - Use `/community starboard` to select its channel, emoji, and reaction threshold.
 - Configure `log_channel` and enable event logging to record joins, leaves, deleted/edited messages, role/channel changes, bans, and AutoMod actions.
 

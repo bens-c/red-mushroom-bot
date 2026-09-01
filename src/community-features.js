@@ -240,6 +240,17 @@ async function handleCommunity(interaction, helpers) {
     await channel.send({ content, allowedMentions: { users: [interaction.user.id] } });
     return interaction.reply({ content: `✅ Welcome preview sent to ${channel}.`, flags: MessageFlags.Ephemeral });
   }
+  if (sub === 'autorole-test') {
+    const user = interaction.options.getUser('user') || interaction.user;
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+    if (!member) return helpers.replyError(interaction, 'That user is not currently in this server.');
+    const result = await assignAutorole(member);
+    if (result.status === 'not-configured') return helpers.replyError(interaction, 'Configure **Automatic member role** with `/config set-role` first.');
+    if (result.status === 'missing-role') return helpers.replyError(interaction, 'The configured autorole no longer exists. Configure it again with `/config set-role`.');
+    if (result.status === 'not-editable') return helpers.replyError(interaction, `I cannot assign ${result.role}. Give me **Manage Roles** and move my bot role above it.`);
+    if (result.status === 'already-has') return interaction.reply({ content: `ℹ️ ${member} already has ${result.role}. Autorole configuration is working.`, flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: `✅ Autorole test successful: assigned ${result.role} to ${member}.`, flags: MessageFlags.Ephemeral });
+  }
   const title = interaction.options.getString('title', true);
   const description = interaction.options.getString('description', true).replaceAll('\\n', '\n');
   const channel = interaction.options.getChannel('channel') || interaction.channel;
@@ -324,11 +335,26 @@ async function updateStarboard(reaction) {
   await entries.updateOne({ guild_id: guild.id, source_message_id: source.id }, { $set: { source_channel_id: source.channelId, starboard_channel_id: channelId, starboard_message_id: posted.id, updated_at: new Date() } }, { upsert: true });
 }
 
+export async function assignAutorole(member) {
+  const roleId = getSetting(member.guild.id, 'autorole_role');
+  if (!roleId) return { status: 'not-configured', role: null };
+  const role = await member.guild.roles.fetch(roleId).catch(() => null);
+  if (!role) return { status: 'missing-role', role: null };
+  if (member.roles.cache.has(role.id)) return { status: 'already-has', role };
+  if (!role.editable) return { status: 'not-editable', role };
+  await member.roles.add(role, 'Configured autorole');
+  return { status: 'assigned', role };
+}
+
 export async function handleMemberJoin(member) {
+  const autorole = await assignAutorole(member).catch(error => {
+    console.error(`Autorole failed for ${member.user.tag} in ${member.guild.name}:`, error);
+    return null;
+  });
+  if (autorole && !['assigned', 'already-has', 'not-configured'].includes(autorole.status)) {
+    console.warn(`Autorole not assigned in ${member.guild.name}: ${autorole.status}.`);
+  }
   if (getSetting(member.guild.id, 'welcome_enabled') === 'true') {
-    const roleId = getSetting(member.guild.id, 'autorole_role');
-    const role = roleId ? await member.guild.roles.fetch(roleId).catch(() => null) : null;
-    if (role?.editable) await member.roles.add(role, 'Configured autorole').catch(() => {});
     const channelId = getSetting(member.guild.id, 'welcome_channel');
     const channel = channelId ? await member.guild.channels.fetch(channelId).catch(() => null) : null;
     if (channel?.isTextBased()) {
