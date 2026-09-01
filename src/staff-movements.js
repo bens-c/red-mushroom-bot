@@ -4,7 +4,7 @@ import {
   MessageFlags,
   PermissionFlagsBits
 } from 'discord.js';
-import { getCollection, getSetting } from './database.js';
+import { getCollection } from './database.js';
 
 const pendingUpdates = new Map();
 const suppressedUpdates = new Map();
@@ -62,18 +62,11 @@ async function findRoleChangeActor(guild, userId) {
 }
 
 function movementDetails(previousRole, currentRole) {
-  if (!previousRole && currentRole) return { action: 'hired', title: 'Hired', position: currentRole.name };
-  if (previousRole && !currentRole) return { action: 'removed from staff', title: 'Removed from staff', position: 'No staff role' };
-  if (currentRole.position > previousRole.position) return { action: 'promoted', title: 'Promoted', position: currentRole.name };
-  if (currentRole.position < previousRole.position) return { action: 'demoted', title: 'Demoted', position: currentRole.name };
-  return { action: 'transferred', title: 'Transferred', position: currentRole.name };
-}
-
-function applyTemplate(template, values) {
-  return Object.entries(values).reduce(
-    (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
-    template
-  );
+  if (!previousRole && currentRole) return { action: 'hired', title: '🍄 Staff joined', position: currentRole.name, color: 0x57f287 };
+  if (previousRole && !currentRole) return { action: 'removed from staff', title: '👋 Staff departure', position: 'No staff role', color: 0xed4245 };
+  if (currentRole.position > previousRole.position) return { action: 'promoted', title: '⬆️ Promotion', position: currentRole.name, color: 0x57f287 };
+  if (currentRole.position < previousRole.position) return { action: 'demoted', title: '⬇️ Demotion', position: currentRole.name, color: 0xed4245 };
+  return { action: 'transferred', title: '🔄 Transfer', position: currentRole.name, color: 0x5865f2 };
 }
 
 async function publishAutomaticMovement(update, helpers) {
@@ -93,22 +86,18 @@ async function publishAutomaticMovement(update, helpers) {
   if (!destination) return;
   const { actor, reason } = await findRoleChangeActor(guild, member.id);
   const movement = movementDetails(previousRole, currentRole);
-  const description = applyTemplate(getSetting(guild.id, 'movement_template'), {
-    user: member,
-    actor,
-    action: movement.action,
-    position: movement.position,
-    reason,
-    server: guild.name
-  });
-  const fields = [];
-  if (previousRole) fields.push({ name: 'Previous role', value: `${previousRole}`, inline: true });
-  if (currentRole) fields.push({ name: 'New role', value: `${currentRole}`, inline: true });
+  const description = previousRole && currentRole
+    ? `${member} has been **${movement.action}**\n${previousRole}  →  ${currentRole}`
+    : currentRole
+      ? `${member} joined the staff team as ${currentRole}`
+      : `${member} left the staff team`;
+  const actorName = typeof actor === 'string' ? actor : actor.tag;
   const embed = helpers.brandEmbed(guild.id)
-    .setTitle(`Staff update • ${movement.title}`)
+    .setTitle(movement.title)
     .setDescription(description)
+    .setColor(movement.color)
     .setThumbnail(member.user.displayAvatarURL())
-    .addFields(fields);
+    .setFooter({ text: `Changed by ${actorName}` });
   await destination.send({ embeds: [embed] });
   await getCollection('staff_movements').insertOne({
     guild_id: guild.id,
