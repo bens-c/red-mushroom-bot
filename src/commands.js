@@ -3,6 +3,7 @@ import {
   ChannelType
 } from 'discord.js';
 import { extraCommands } from './extra-commands.js';
+import { staffRolesCommand } from './staff-movements.js';
 
 export const commands = [
   {
@@ -172,5 +173,6 @@ export const commands = [
     ]
   },
   { name: 'help', description: 'Show the bot command guide', dm_permission: false },
+  staffRolesCommand,
   ...extraCommands
 ];

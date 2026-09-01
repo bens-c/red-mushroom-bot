@@ -42,6 +42,7 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/config view|set-channel|set-role|set-text|set-option|reset`
 - `/application panel|stats`
 - `/staff` with hire, promote, demote, transfer, leave, return, resign, and terminate actions
+- `/staff-roles add|remove|list` to trigger movements automatically when watched roles change
 - `/announce`
 - `/help`
 - `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
@@ -56,6 +57,8 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/community starboard|welcome-test|embed|logs`
 
 The `/staff` command can add and remove roles in the same action. Its announcement template supports `{user}`, `{actor}`, `{action}`, `{position}`, `{reason}`, and `{server}`. Decision DM templates support `{server}` and `{reason}`.
+
+Add every staff rank with `/staff-roles add`. When a member's highest watched staff role changes, the bot automatically posts a hire, promotion, demotion, transfer, or removal in the configured staff movement channel. Discord's role order determines which rank is higher.
 
 Configure `ticket_category`, `transcript_channel`, and `support_role` with `/config set-channel` and `/config set-role` before posting a ticket panel. Server backup restore is additive: it creates missing roles/channels and never deletes existing server structures. Type `RESTORE` explicitly when invoking it.
 

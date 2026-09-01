@@ -70,13 +70,15 @@ export async function initializeDatabase() {
     databaseHandle.collection('stickies').createIndex({ guild_id: 1, channel_id: 1 }, { unique: true }),
     databaseHandle.collection('reaction_roles').createIndex({ guild_id: 1, message_id: 1, emoji_key: 1 }, { unique: true }),
     databaseHandle.collection('starboard_entries').createIndex({ guild_id: 1, source_message_id: 1 }, { unique: true }),
-    databaseHandle.collection('automod_violations').createIndex({ guild_id: 1, user_id: 1, created_at: -1 })
+    databaseHandle.collection('automod_violations').createIndex({ guild_id: 1, user_id: 1, created_at: -1 }),
+    databaseHandle.collection('staff_roles').createIndex({ guild_id: 1, role_id: 1 }, { unique: true }),
+    databaseHandle.collection('staff_movements').createIndex({ guild_id: 1, user_id: 1, created_at: -1 })
   ]);
 }
 
 export function getCollection(name) {
   if (!databaseHandle) throw new Error('Database has not been initialized.');
-  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations'];
+  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations', 'staff_roles', 'staff_movements'];
   if (!allowed.includes(name)) throw new Error(`Collection ${name} is not available.`);
   return databaseHandle.collection(name);
 }

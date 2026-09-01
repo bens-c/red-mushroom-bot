@@ -18,6 +18,7 @@ import {
   TextInputStyle
 } from 'discord.js';
 import { commands } from './commands.js';
+import { handleAutomaticStaffMovement, handleStaffRolesCommand, suppressAutomaticStaffMovement } from './staff-movements.js';
 import { handleExtraButton, handleExtraCommand, handleMessage, startBackgroundJobs } from './extra-features.js';
 import {
   handleAutoModerationExecution,
@@ -146,6 +147,7 @@ client.on(Events.MessageReactionAdd, (reaction, user) => handleReactionRole(reac
 client.on(Events.MessageReactionRemove, (reaction, user) => handleReactionRole(reaction, user, false).catch(console.error));
 client.on(Events.GuildMemberAdd, member => handleMemberJoin(member).catch(console.error));
 client.on(Events.GuildMemberRemove, member => handleMemberLeave(member).catch(console.error));
+client.on(Events.GuildMemberUpdate, (oldMember, member) => handleAutomaticStaffMovement(oldMember, member, { brandEmbed, getTextChannel, logEvent }));
 client.on(Events.AutoModerationActionExecution, execution => handleAutoModerationExecution(execution).catch(console.error));
 client.on(Events.MessageDelete, message => handleDiscordEvent('messageDelete', message).catch(console.error));
 client.on(Events.MessageUpdate, (oldMessage, message) => handleDiscordEvent('messageUpdate', message, oldMessage).catch(console.error));
@@ -178,6 +180,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'config') return handleConfig(interaction);
   if (interaction.commandName === 'application') return handleApplicationCommand(interaction);
   if (interaction.commandName === 'staff') return handleStaff(interaction);
+  if (await handleStaffRolesCommand(interaction, { brandEmbed, replyError, isManager })) return;
   if (interaction.commandName === 'announce') return handleAnnouncement(interaction);
   if (interaction.commandName === 'help') return handleHelp(interaction);
   if (await handleExtraCommand(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
@@ -395,6 +398,7 @@ async function handleStaff(interaction) {
   if (addRole && !addRole.editable) return replyError(interaction, `I cannot add **${addRole.name}**. Move my bot role above it.`);
   if (removeRole && !removeRole.editable) return replyError(interaction, `I cannot remove **${removeRole.name}**. Move my bot role above it.`);
   const changes = [];
+  if (addRole || removeRole) suppressAutomaticStaffMovement(interaction.guildId, target.id);
   if (removeRole) {
     await target.roles.remove(removeRole, `${action} by ${interaction.user.tag}: ${reason}`);
     changes.push(`removed ${removeRole.name}`);
@@ -445,7 +449,7 @@ async function handleHelp(interaction) {
     .addFields(
       { name: 'Setup', value: '`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set access and accepted roles\n`/config set-text` — edit branding, questions, and templates\n`/config set-option` — toggle options' },
       { name: 'Applications', value: '`/application panel` — post the Apply button\n`/application stats` — review totals\nReviewers accept/reject with buttons in the configured review channel.' },
-      { name: 'Staff & communication', value: '`/staff` — hire, promote, demote, transfer, leave, resign, or terminate\n`/announce` — post a branded announcement' },
+      { name: 'Staff & communication', value: '`/staff` — record a movement\n`/staff-roles` — automatic promotion/demotion posts\n`/announce` — post a branded announcement' },
       { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, purge, locks, and slowmode\n`/level` — XP ranks, leaderboard, and XP management\n`/giveaway` — start, end, reroll, and list giveaways' },
       { name: 'Support & safety', value: '`/ticket` — panels, private tickets, claims, members, transcripts, and closing\n`/backup` — create, list, safely restore, and delete server backups\n`/utility` — info, polls, reminders, AFK, and custom responses' },
       { name: 'Automation & roles', value: '`/sticky` — persistent channel messages\n`/reaction-role` — normal, verify, and drop reaction roles\n`/automod` — native keyword, spam, and mention filters\n`/community` — starboard, welcome preview, embeds, and logs' },
