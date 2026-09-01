@@ -161,8 +161,16 @@ client.on(Events.InteractionCreate, async interaction => {
     else if (interaction.isButton()) await handleButton(interaction);
     else if (interaction.isModalSubmit()) await handleModal(interaction);
   } catch (error) {
-    console.error(error);
-    await replyError(interaction, 'Something went wrong. Check the bot logs and permissions.').catch(() => {});
+    const knownErrors = {
+      50013: 'I am missing a required Discord permission or my bot role is below the target role.',
+      50001: 'I cannot access the selected channel or resource.',
+      10003: 'The selected channel no longer exists.',
+      10008: 'The selected message no longer exists.'
+    };
+    const friendlyMessage = knownErrors[error.code];
+    if (friendlyMessage) console.warn(`Discord API ${error.code}: ${error.message}`);
+    else console.error(error);
+    await replyError(interaction, friendlyMessage || 'Something went wrong. Check the bot logs and permissions.').catch(() => {});
   }
 });
 

@@ -78,6 +78,7 @@ async function handleModeration(interaction, helpers) {
   const sub = interaction.options.getSubcommand();
   const targetUser = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason') || 'No reason provided';
+  const botMember = interaction.guild.members.me;
 
   if (sub === 'warnings') {
     const warnings = await getCollection('moderation_cases').find({ guild_id: interaction.guildId, user_id: targetUser.id, type: 'warn' }).sort({ created_at: -1 }).limit(15).toArray();
@@ -87,6 +88,7 @@ async function handleModeration(interaction, helpers) {
 
   if (sub === 'purge') {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageMessages)) return helpers.replyError(interaction, 'You need Manage Messages.');
+    if (!interaction.channel.permissionsFor(botMember).has(PermissionFlagsBits.ManageMessages)) return helpers.replyError(interaction, 'My bot role needs **Manage Messages** in this channel.');
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const amount = interaction.options.getInteger('amount', true);
     const messages = await interaction.channel.messages.fetch({ limit: 100 });
@@ -97,6 +99,7 @@ async function handleModeration(interaction, helpers) {
 
   if (sub === 'lock' || sub === 'unlock') {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageChannels)) return helpers.replyError(interaction, 'You need Manage Channels.');
+    if (!interaction.channel.permissionsFor(botMember).has(PermissionFlagsBits.ManageChannels)) return helpers.replyError(interaction, 'My bot role needs **Manage Channels** here.');
     await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: sub === 'lock' ? false : null }, { reason });
     await addCase(interaction, sub, interaction.guildId, reason, { channel_id: interaction.channelId });
     return interaction.reply({ content: `✅ Channel ${sub === 'lock' ? 'locked' : 'unlocked'}.`, flags: MessageFlags.Ephemeral });
@@ -104,6 +107,7 @@ async function handleModeration(interaction, helpers) {
 
   if (sub === 'slowmode') {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageChannels)) return helpers.replyError(interaction, 'You need Manage Channels.');
+    if (!interaction.channel.permissionsFor(botMember).has(PermissionFlagsBits.ManageChannels)) return helpers.replyError(interaction, 'My bot role needs **Manage Channels** here.');
     const seconds = interaction.options.getInteger('seconds', true);
     await interaction.channel.setRateLimitPerUser(seconds, `Changed by ${interaction.user.tag}`);
     return interaction.reply({ content: `✅ Slowmode set to ${seconds} seconds.`, flags: MessageFlags.Ephemeral });
@@ -117,15 +121,24 @@ async function handleModeration(interaction, helpers) {
 
   const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
   if (!member && ['kick', 'timeout'].includes(sub)) return helpers.replyError(interaction, 'That user is not currently in this server.');
-  if (member && !member.moderatable && ['kick', 'timeout'].includes(sub)) return helpers.replyError(interaction, 'I cannot moderate that member. Check the role hierarchy.');
+  if (member?.id === interaction.guild.ownerId) return helpers.replyError(interaction, 'The server owner cannot be moderated.');
+  if (member && interaction.user.id !== interaction.guild.ownerId && interaction.member.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
+    return helpers.replyError(interaction, 'You cannot moderate a member whose highest role is equal to or above yours.');
+  }
   if (sub === 'ban') {
     if (!hasPermission(interaction, PermissionFlagsBits.BanMembers)) return helpers.replyError(interaction, 'You need Ban Members.');
+    if (!botMember.permissions.has(PermissionFlagsBits.BanMembers)) return helpers.replyError(interaction, 'My bot role needs the **Ban Members** permission.');
+    if (member && !member.bannable) return helpers.replyError(interaction, 'I cannot ban that member. Move my bot role above their highest role.');
     const deleteDays = interaction.options.getInteger('delete-days') || 0;
     await interaction.guild.members.ban(targetUser.id, { deleteMessageSeconds: deleteDays * 86400, reason });
   } else if (sub === 'kick') {
     if (!hasPermission(interaction, PermissionFlagsBits.KickMembers)) return helpers.replyError(interaction, 'You need Kick Members.');
+    if (!botMember.permissions.has(PermissionFlagsBits.KickMembers)) return helpers.replyError(interaction, 'My bot role needs the **Kick Members** permission.');
+    if (!member.kickable) return helpers.replyError(interaction, 'I cannot kick that member. Move my bot role above their highest role.');
     await member.kick(reason);
   } else if (sub === 'timeout') {
+    if (!botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) return helpers.replyError(interaction, 'My bot role needs the **Timeout Members** permission.');
+    if (!member.moderatable) return helpers.replyError(interaction, 'I cannot timeout that member. Move my bot role above their highest role.');
     const input = interaction.options.getString('duration', true);
     const duration = input.toLowerCase() === 'off' ? null : parseDuration(input);
     if (duration === null && input.toLowerCase() !== 'off') return helpers.replyError(interaction, 'Invalid duration. Use values such as `10m`, `2h`, or `7d`.');
