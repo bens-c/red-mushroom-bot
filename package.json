@@ -8,14 +8,15 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "check": "node --check src/index.js && node --check src/commands.js && node --check src/database.js",
-    "test": "node --test"
+    "test": "node --test",
+    "verify:mongodb": "node scripts/verify-mongodb.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "discord.js": "^14.27.0",
-    "dotenv": "^17.2.2"
+    "dotenv": "^17.2.2",
+    "mongodb": "^7.6.0"
   }
 }

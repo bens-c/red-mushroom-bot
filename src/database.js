@@ -1,34 +1,4 @@
-import Database from 'better-sqlite3';
-import fs from 'node:fs';
-import path from 'node:path';
-
-const databasePath = path.resolve(process.env.DATABASE_PATH || './data/bot.sqlite');
-fs.mkdirSync(path.dirname(databasePath), { recursive: true });
-
-const db = new Database(databasePath);
-db.pragma('journal_mode = WAL');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS settings (
-    guild_id TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    PRIMARY KEY (guild_id, key)
-  );
-  CREATE TABLE IF NOT EXISTS applications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    answers TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    reviewer_id TEXT,
-    review_reason TEXT,
-    review_message_id TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at TEXT
-  );
-  CREATE INDEX IF NOT EXISTS applications_guild_status
-    ON applications (guild_id, status);
-`);
+import { MongoClient, ObjectId } from 'mongodb';
 
 const defaultSettings = {
   brand_name: 'Staff Team',
@@ -46,77 +16,138 @@ const defaultSettings = {
   application_rejected_template: 'Thank you for applying to **{server}**. Your application was not accepted this time.'
 };
 
-const getStatement = db.prepare('SELECT value FROM settings WHERE guild_id = ? AND key = ?');
-const setStatement = db.prepare(`
-  INSERT INTO settings (guild_id, key, value) VALUES (?, ?, ?)
-  ON CONFLICT(guild_id, key) DO UPDATE SET value = excluded.value
-`);
-const deleteStatement = db.prepare('DELETE FROM settings WHERE guild_id = ? AND key = ?');
+let client;
+let settingsCollection;
+let applicationsCollection;
+const settingsCache = new Map();
 
 export const settingKeys = Object.keys(defaultSettings);
 
+export async function initializeDatabase() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error('Missing MONGODB_URI. Add the MongoDB Atlas connection string to .env.');
+  client = new MongoClient(uri, { appName: 'red-mushroom-discord-bot' });
+  await client.connect();
+  const database = client.db(process.env.MONGODB_DATABASE || 'red_mushroom_bot');
+  settingsCollection = database.collection('settings');
+  applicationsCollection = database.collection('applications');
+
+  const savedSettings = await settingsCollection.find({}).toArray();
+  for (const document of savedSettings) {
+    const { _id, ...settings } = document;
+    settingsCache.set(String(_id), settings);
+  }
+
+  await Promise.all([
+    applicationsCollection.createIndex({ guild_id: 1, status: 1 }, { name: 'guild_status' }),
+    applicationsCollection.createIndex(
+      { guild_id: 1, user_id: 1, status: 1, created_at: -1 },
+      { name: 'guild_user_status_created' }
+    )
+  ]);
+}
+
+function ensureInitialized() {
+  if (!settingsCollection || !applicationsCollection) throw new Error('Database has not been initialized.');
+}
+
+function objectId(id) {
+  try {
+    return new ObjectId(id);
+  } catch {
+    return null;
+  }
+}
+
 export function getSetting(guildId, key) {
-  return getStatement.get(guildId, key)?.value ?? defaultSettings[key] ?? null;
+  return settingsCache.get(guildId)?.[key] ?? defaultSettings[key] ?? null;
 }
 
-export function setSetting(guildId, key, value) {
-  setStatement.run(guildId, key, String(value));
+export async function setSetting(guildId, key, value) {
+  ensureInitialized();
+  const normalizedValue = String(value);
+  await settingsCollection.updateOne(
+    { _id: guildId },
+    { $set: { [key]: normalizedValue } },
+    { upsert: true }
+  );
+  settingsCache.set(guildId, { ...(settingsCache.get(guildId) || {}), [key]: normalizedValue });
 }
 
-export function resetSetting(guildId, key) {
-  deleteStatement.run(guildId, key);
+export async function resetSetting(guildId, key) {
+  ensureInitialized();
+  await settingsCollection.updateOne({ _id: guildId }, { $unset: { [key]: '' } });
+  const settings = { ...(settingsCache.get(guildId) || {}) };
+  delete settings[key];
+  settingsCache.set(guildId, settings);
 }
 
 export function getAllSettings(guildId) {
-  const saved = Object.fromEntries(
-    db.prepare('SELECT key, value FROM settings WHERE guild_id = ?').all(guildId)
-      .map(({ key, value }) => [key, value])
+  return { ...defaultSettings, ...(settingsCache.get(guildId) || {}) };
+}
+
+export async function createApplication(guildId, userId, answers) {
+  ensureInitialized();
+  const result = await applicationsCollection.insertOne({
+    guild_id: guildId,
+    user_id: userId,
+    answers,
+    status: 'pending',
+    reviewer_id: null,
+    review_reason: null,
+    review_message_id: null,
+    created_at: new Date(),
+    reviewed_at: null
+  });
+  return result.insertedId.toString();
+}
+
+export async function setApplicationMessage(id, messageId) {
+  const _id = objectId(id);
+  if (!_id) return;
+  await applicationsCollection.updateOne({ _id }, { $set: { review_message_id: messageId } });
+}
+
+export async function getApplication(id, guildId) {
+  const _id = objectId(id);
+  if (!_id) return null;
+  const application = await applicationsCollection.findOne({ _id, guild_id: guildId });
+  if (application) application.id = application._id.toString();
+  return application;
+}
+
+export async function getPendingApplication(guildId, userId) {
+  const application = await applicationsCollection.findOne(
+    { guild_id: guildId, user_id: userId, status: 'pending' },
+    { sort: { created_at: -1 }, projection: { _id: 1 } }
   );
-  return { ...defaultSettings, ...saved };
+  return application ? { id: application._id.toString() } : null;
 }
 
-export function createApplication(guildId, userId, answers) {
-  const result = db.prepare(
-    'INSERT INTO applications (guild_id, user_id, answers) VALUES (?, ?, ?)'
-  ).run(guildId, userId, JSON.stringify(answers));
-  return Number(result.lastInsertRowid);
+export async function reviewApplication(id, guildId, status, reviewerId, reason) {
+  const _id = objectId(id);
+  if (!_id) return 0;
+  const result = await applicationsCollection.updateOne(
+    { _id, guild_id: guildId, status: 'pending' },
+    { $set: { status, reviewer_id: reviewerId, review_reason: reason || null, reviewed_at: new Date() } }
+  );
+  return result.modifiedCount;
 }
 
-export function setApplicationMessage(id, messageId) {
-  db.prepare('UPDATE applications SET review_message_id = ? WHERE id = ?').run(messageId, id);
+export async function getApplicationStats(guildId) {
+  const [total, pending, accepted, rejected] = await Promise.all([
+    applicationsCollection.countDocuments({ guild_id: guildId }),
+    applicationsCollection.countDocuments({ guild_id: guildId, status: 'pending' }),
+    applicationsCollection.countDocuments({ guild_id: guildId, status: 'accepted' }),
+    applicationsCollection.countDocuments({ guild_id: guildId, status: 'rejected' })
+  ]);
+  return { total, pending, accepted, rejected };
 }
 
-export function getApplication(id, guildId) {
-  const row = db.prepare('SELECT * FROM applications WHERE id = ? AND guild_id = ?').get(id, guildId);
-  if (row) row.answers = JSON.parse(row.answers);
-  return row;
-}
-
-export function getPendingApplication(guildId, userId) {
-  return db.prepare(
-    "SELECT id FROM applications WHERE guild_id = ? AND user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1"
-  ).get(guildId, userId);
-}
-
-export function reviewApplication(id, guildId, status, reviewerId, reason) {
-  return db.prepare(`
-    UPDATE applications
-    SET status = ?, reviewer_id = ?, review_reason = ?, reviewed_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND guild_id = ? AND status = 'pending'
-  `).run(status, reviewerId, reason || null, id, guildId).changes;
-}
-
-export function getApplicationStats(guildId) {
-  return db.prepare(`
-    SELECT
-      COUNT(*) AS total,
-      SUM(status = 'pending') AS pending,
-      SUM(status = 'accepted') AS accepted,
-      SUM(status = 'rejected') AS rejected
-    FROM applications WHERE guild_id = ?
-  `).get(guildId);
-}
-
-export function closeDatabase() {
-  db.close();
+export async function closeDatabase() {
+  if (client) await client.close();
+  client = null;
+  settingsCollection = null;
+  applicationsCollection = null;
+  settingsCache.clear();
 }

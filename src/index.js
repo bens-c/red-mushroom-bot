@@ -23,6 +23,7 @@ import {
   getApplicationStats,
   getPendingApplication,
   getSetting,
+  initializeDatabase,
   resetSetting,
   reviewApplication,
   setApplicationMessage,
@@ -155,7 +156,7 @@ async function handleConfig(interaction) {
   if (subcommand === 'set-channel') {
     const key = interaction.options.getString('purpose', true);
     const channel = interaction.options.getChannel('channel', true);
-    setSetting(interaction.guildId, key, channel.id);
+    await setSetting(interaction.guildId, key, channel.id);
     await interaction.reply({ content: `✅ **${key}** is now ${channel}.`, ephemeral: true });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} set **${key}** to ${channel}.`);
   }
@@ -164,7 +165,7 @@ async function handleConfig(interaction) {
     const key = interaction.options.getString('purpose', true);
     const role = interaction.options.getRole('role', true);
     if (role.id === interaction.guildId) return replyError(interaction, 'The @everyone role cannot be used here.');
-    setSetting(interaction.guildId, key, role.id);
+    await setSetting(interaction.guildId, key, role.id);
     await interaction.reply({ content: `✅ **${key}** is now ${role}.`, ephemeral: true });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} set **${key}** to ${role}.`);
   }
@@ -177,7 +178,7 @@ async function handleConfig(interaction) {
     if (key === 'brand_color' && !/^#[0-9a-f]{6}$/i.test(value)) return replyError(interaction, 'Use a hex color such as `#d93636`.');
     if (key === 'brand_name' && value.length > 256) return replyError(interaction, 'Brand name must be 256 characters or fewer.');
     if (key === 'application_title' && value.length > 256) return replyError(interaction, 'Application title must be 256 characters or fewer.');
-    setSetting(interaction.guildId, key, value);
+    await setSetting(interaction.guildId, key, value);
     await interaction.reply({ content: `✅ **${key}** was updated.`, ephemeral: true });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} updated **${key}**.`);
   }
@@ -185,14 +186,14 @@ async function handleConfig(interaction) {
   if (subcommand === 'set-option') {
     const key = interaction.options.getString('key', true);
     const enabled = interaction.options.getBoolean('enabled', true);
-    setSetting(interaction.guildId, key, String(enabled));
+    await setSetting(interaction.guildId, key, String(enabled));
     return interaction.reply({ content: `✅ **${key}** is now **${enabled ? 'enabled' : 'disabled'}**.`, ephemeral: true });
   }
 
   if (subcommand === 'reset') {
     const key = interaction.options.getString('key', true);
     if (!allKeys.includes(key)) return replyError(interaction, `Unknown key. Use one shown in \`/config view\`.`);
-    resetSetting(interaction.guildId, key);
+    await resetSetting(interaction.guildId, key);
     return interaction.reply({ content: `✅ **${key}** was reset.`, ephemeral: true });
   }
 }
@@ -211,7 +212,7 @@ async function handleApplicationCommand(interaction) {
     return interaction.reply({ content: '✅ Application panel posted.', ephemeral: true });
   }
   if (!isReviewer(interaction)) return replyError(interaction, 'You need the reviewer or manager role.');
-  const stats = getApplicationStats(interaction.guildId);
+  const stats = await getApplicationStats(interaction.guildId);
   return interaction.reply({
     embeds: [brandEmbed(interaction.guildId).setTitle('Application statistics').addFields(
       { name: 'Pending', value: String(stats.pending || 0), inline: true },
@@ -225,7 +226,7 @@ async function handleApplicationCommand(interaction) {
 
 async function handleButton(interaction) {
   if (interaction.customId === 'application:start') {
-    if (getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
+    if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
     const modal = new ModalBuilder().setCustomId('application:submit').setTitle(getSetting(interaction.guildId, 'application_title').slice(0, 45));
     const rows = [];
     for (let i = 1; i <= 5; i += 1) {
@@ -244,10 +245,10 @@ async function handleButton(interaction) {
     return interaction.showModal(modal);
   }
 
-  const match = interaction.customId.match(/^application:(accept|reject):(\d+)$/);
+  const match = interaction.customId.match(/^application:(accept|reject):([a-f0-9]{24})$/i);
   if (!match) return;
   if (!isReviewer(interaction)) return replyError(interaction, 'You need the reviewer or manager role.');
-  const application = getApplication(Number(match[2]), interaction.guildId);
+  const application = await getApplication(match[2], interaction.guildId);
   if (!application || application.status !== 'pending') return replyError(interaction, 'This application has already been reviewed or no longer exists.');
   const modal = new ModalBuilder()
     .setCustomId(`application:decision:${match[1]}:${match[2]}`)
@@ -260,13 +261,13 @@ async function handleButton(interaction) {
 
 async function handleModal(interaction) {
   if (interaction.customId === 'application:submit') return submitApplication(interaction);
-  const match = interaction.customId.match(/^application:decision:(accept|reject):(\d+)$/);
-  if (match) return decideApplication(interaction, match[1], Number(match[2]));
+  const match = interaction.customId.match(/^application:decision:(accept|reject):([a-f0-9]{24})$/i);
+  if (match) return decideApplication(interaction, match[1], match[2]);
 }
 
 async function submitApplication(interaction) {
   await interaction.deferReply({ ephemeral: true });
-  if (getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
+  if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
   const answers = [];
   for (let i = 1; i <= 5; i += 1) {
     const question = getSetting(interaction.guildId, `application_question_${i}`);
@@ -275,7 +276,7 @@ async function submitApplication(interaction) {
   }
   const reviewChannel = await getTextChannel(interaction.guild, 'application_channel');
   if (!reviewChannel) return replyError(interaction, 'Applications are not configured yet. Please contact a server administrator.');
-  const id = createApplication(interaction.guildId, interaction.user.id, answers);
+  const id = await createApplication(interaction.guildId, interaction.user.id, answers);
   const embed = brandEmbed(interaction.guildId, { footer: `Application #${id}` })
     .setTitle(`New application • ${interaction.user.username}`)
     .setThumbnail(interaction.user.displayAvatarURL())
@@ -287,7 +288,7 @@ async function submitApplication(interaction) {
   );
   const reviewerRole = getSetting(interaction.guildId, 'reviewer_role');
   const message = await reviewChannel.send({ content: reviewerRole ? `<@&${reviewerRole}>` : undefined, embeds: [embed], components: [row], allowedMentions: { roles: reviewerRole ? [reviewerRole] : [] } });
-  setApplicationMessage(id, message.id);
+  await setApplicationMessage(id, message.id);
   await interaction.editReply(`✅ Your application **#${id}** was submitted. You will be notified when it is reviewed.`);
   return logEvent(interaction.guild, 'Application submitted', `${interaction.user} submitted application **#${id}**.`);
 }
@@ -297,8 +298,8 @@ async function decideApplication(interaction, decision, id) {
   await interaction.deferReply({ ephemeral: true });
   const status = decision === 'accept' ? 'accepted' : 'rejected';
   const reason = interaction.fields.getTextInputValue('reason').trim();
-  if (!reviewApplication(id, interaction.guildId, status, interaction.user.id, reason)) return replyError(interaction, 'This application has already been reviewed.');
-  const application = getApplication(id, interaction.guildId);
+  if (!await reviewApplication(id, interaction.guildId, status, interaction.user.id, reason)) return replyError(interaction, 'This application has already been reviewed.');
+  const application = await getApplication(id, interaction.guildId);
   const member = await interaction.guild.members.fetch(application.user_id).catch(() => null);
   const acceptedRoleId = getSetting(interaction.guildId, 'accepted_role');
   let roleNote = '';
@@ -396,10 +397,18 @@ async function handleHelp(interaction) {
   return interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-process.on('SIGINT', () => {
-  closeDatabase();
+process.on('SIGINT', async () => {
+  await closeDatabase();
   client.destroy();
   process.exit(0);
 });
 
-client.login(token);
+try {
+  await initializeDatabase();
+  console.log(`Connected to MongoDB database ${process.env.MONGODB_DATABASE || 'red_mushroom_bot'}.`);
+  await client.login(token);
+} catch (error) {
+  console.error('Startup failed:', error.message);
+  await closeDatabase();
+  process.exit(1);
+}
