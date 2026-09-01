@@ -3,6 +3,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelType,
   Client,
   EmbedBuilder,
   Events,
@@ -15,6 +16,7 @@ import {
   TextInputStyle
 } from 'discord.js';
 import { commands } from './commands.js';
+import { handleExtraButton, handleExtraCommand, handleMessage, startBackgroundJobs } from './extra-features.js';
 import {
   closeDatabase,
   createApplication,
@@ -38,10 +40,10 @@ if (!token || !clientId) {
   process.exit(1);
 }
 
-const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel'];
-const roleKeys = ['manager_role', 'reviewer_role', 'accepted_role'];
+const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel', 'ticket_category', 'transcript_channel'];
+const roleKeys = ['manager_role', 'reviewer_role', 'accepted_role', 'support_role'];
 const allKeys = [...settingKeys, ...channelKeys, ...roleKeys];
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages] });
 
 function color(guildId) {
   const value = getSetting(guildId, 'brand_color');
@@ -114,7 +116,10 @@ client.once(Events.ClientReady, async readyClient => {
   console.log(`Online as ${readyClient.user.tag} in ${readyClient.guilds.cache.size} server(s).`);
   await registerCommands().catch(error => console.error('Command registration failed:', error));
   readyClient.user.setActivity('/help • Staff management');
+  startBackgroundJobs(readyClient);
 });
+
+client.on(Events.MessageCreate, message => handleMessage(message).catch(console.error));
 
 client.on(Events.InteractionCreate, async interaction => {
   try {
@@ -133,6 +138,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'staff') return handleStaff(interaction);
   if (interaction.commandName === 'announce') return handleAnnouncement(interaction);
   if (interaction.commandName === 'help') return handleHelp(interaction);
+  if (await handleExtraCommand(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
 }
 
 async function handleConfig(interaction) {
@@ -156,6 +162,8 @@ async function handleConfig(interaction) {
   if (subcommand === 'set-channel') {
     const key = interaction.options.getString('purpose', true);
     const channel = interaction.options.getChannel('channel', true);
+    if (key === 'ticket_category' && channel.type !== ChannelType.GuildCategory) return replyError(interaction, 'Ticket category must be a category channel.');
+    if (key !== 'ticket_category' && !channel.isTextBased()) return replyError(interaction, 'This setting requires a text or announcement channel.');
     await setSetting(interaction.guildId, key, channel.id);
     await interaction.reply({ content: `✅ **${key}** is now ${channel}.`, ephemeral: true });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} set **${key}** to ${channel}.`);
@@ -225,6 +233,9 @@ async function handleApplicationCommand(interaction) {
 }
 
 async function handleButton(interaction) {
+  if (interaction.customId.startsWith('ticket:') || interaction.customId.startsWith('giveaway:')) {
+    return handleExtraButton(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer });
+  }
   if (interaction.customId === 'application:start') {
     if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
     const modal = new ModalBuilder().setCustomId('application:submit').setTitle(getSetting(interaction.guildId, 'application_title').slice(0, 45));
@@ -392,6 +403,8 @@ async function handleHelp(interaction) {
       { name: 'Setup', value: '`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set access and accepted roles\n`/config set-text` — edit branding, questions, and templates\n`/config set-option` — toggle options' },
       { name: 'Applications', value: '`/application panel` — post the Apply button\n`/application stats` — review totals\nReviewers accept/reject with buttons in the configured review channel.' },
       { name: 'Staff & communication', value: '`/staff` — hire, promote, demote, transfer, leave, resign, or terminate\n`/announce` — post a branded announcement' },
+      { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, purge, locks, and slowmode\n`/level` — XP ranks, leaderboard, and XP management\n`/giveaway` — start, end, reroll, and list giveaways' },
+      { name: 'Support & safety', value: '`/ticket` — panels, private tickets, claims, members, transcripts, and closing\n`/backup` — create, list, safely restore, and delete server backups\n`/utility` — info, polls, reminders, AFK, and custom responses' },
       { name: 'Template placeholders', value: 'Movement: `{user}` `{actor}` `{action}` `{position}` `{reason}` `{server}`\nDecision DMs: `{server}` `{reason}`' }
     );
   return interaction.reply({ embeds: [embed], ephemeral: true });

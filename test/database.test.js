@@ -36,15 +36,22 @@ test('stores configuration and atomically reviews applications in MongoDB', { sk
       accepted: 1,
       rejected: 0
     });
+    await database.getCollection('levels').updateOne(
+      { guild_id: guildId, user_id: 'applicant' },
+      { $set: { xp: 250 } },
+      { upsert: true }
+    );
+    assert.equal((await database.getCollection('levels').findOne({ guild_id: guildId })).xp, 250);
   } finally {
     await database.closeDatabase();
     const cleanupClient = new MongoClient(integrationUri);
     try {
       await cleanupClient.connect();
       const targetDatabase = cleanupClient.db(process.env.MONGODB_DATABASE);
-      await Promise.all([
-        targetDatabase.collection('settings').deleteMany({ _id: guildId }),
-        targetDatabase.collection('applications').deleteMany({ guild_id: guildId })
+    await Promise.all([
+      targetDatabase.collection('settings').deleteMany({ _id: guildId }),
+      targetDatabase.collection('applications').deleteMany({ guild_id: guildId }),
+      targetDatabase.collection('levels').deleteMany({ guild_id: guildId })
       ]);
     } finally {
       await cleanupClient.close();

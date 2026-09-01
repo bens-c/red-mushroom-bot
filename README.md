@@ -1,13 +1,13 @@
 # Red Mushroom Staff Bot
 
-A single configurable Discord bot for staff applications, application reviews, promotions, demotions, transfers, leave, resignations, terminations, announcements, role changes, and audit logging.
+A single configurable Discord bot for staff applications, moderation, XP levels, giveaways, tickets, safe server backups, staff movements, announcements, utilities, and audit logging.
 
 ## Requirements
 
 - Node.js 20.19 or newer
 - A MongoDB Atlas cluster and connection string
 - A Discord application and bot token
-- Bot permissions: View Channels, Send Messages, Embed Links, Read Message History, and Manage Roles
+- Bot permissions: View Channels, Send Messages, Embed Links, Attach Files, Add Reactions, Read Message History, Manage Messages, Manage Channels, Manage Roles, Moderate Members, Kick Members, and Ban Members
 - The bot's role must sit above every role it needs to add or remove
 
 ## Install and run
@@ -31,7 +31,7 @@ All configuration is done through Discord slash commands and stored separately p
 1. Use `/config set-channel` to set application reviews, staff movements, audit logs, and announcements.
 2. Use `/config set-role` to choose managers, application reviewers, and the role granted to accepted applicants.
 3. Use `/config set-text` to customize branding, questions, and message templates.
-4. Use `/config set-option` to enable or disable decision DMs.
+4. Use `/config set-option` to enable or disable decision DMs and individual modules.
 5. Use `/application panel` wherever applicants should see the Apply button.
 6. Use `/config view` at any time to inspect the effective setup.
 
@@ -44,8 +44,16 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/staff` with hire, promote, demote, transfer, leave, return, resign, and terminate actions
 - `/announce`
 - `/help`
+- `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
+- `/level rank|leaderboard|manage`
+- `/giveaway start|end|reroll|list`
+- `/ticket panel|close|claim|add|remove|rename|transcript`
+- `/backup create|list|restore|delete`
+- `/utility ping|avatar|userinfo|serverinfo|poll|remind|afk|custom-add|custom-run|custom-list|custom-delete`
 
 The `/staff` command can add and remove roles in the same action. Its announcement template supports `{user}`, `{actor}`, `{action}`, `{position}`, `{reason}`, and `{server}`. Decision DM templates support `{server}` and `{reason}`.
+
+Configure `ticket_category`, `transcript_channel`, and `support_role` with `/config set-channel` and `/config set-role` before posting a ticket panel. Server backup restore is additive: it creates missing roles/channels and never deletes existing server structures. Type `RESTORE` explicitly when invoking it.
 
 ## MongoDB Atlas
 

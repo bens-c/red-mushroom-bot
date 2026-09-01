@@ -11,6 +11,11 @@ const defaultSettings = {
   application_question_4: 'What is your timezone?',
   application_question_5: 'Why should we choose you?',
   dm_on_decision: 'true',
+  moderation_enabled: 'true',
+  levels_enabled: 'true',
+  giveaways_enabled: 'true',
+  tickets_enabled: 'true',
+  backups_enabled: 'true',
   movement_template: '{user} was **{action}** by {actor}.\n**Position:** {position}\n**Reason:** {reason}',
   application_accepted_template: 'Congratulations! Your application to **{server}** was accepted.',
   application_rejected_template: 'Thank you for applying to **{server}**. Your application was not accepted this time.'
@@ -19,6 +24,7 @@ const defaultSettings = {
 let client;
 let settingsCollection;
 let applicationsCollection;
+let databaseHandle;
 const settingsCache = new Map();
 
 export const settingKeys = Object.keys(defaultSettings);
@@ -28,9 +34,9 @@ export async function initializeDatabase() {
   if (!uri) throw new Error('Missing MONGODB_URI. Add the MongoDB Atlas connection string to .env.');
   client = new MongoClient(uri, { appName: 'red-mushroom-discord-bot' });
   await client.connect();
-  const database = client.db(process.env.MONGODB_DATABASE || 'red_mushroom_bot');
-  settingsCollection = database.collection('settings');
-  applicationsCollection = database.collection('applications');
+  databaseHandle = client.db(process.env.MONGODB_DATABASE || 'red_mushroom_bot');
+  settingsCollection = databaseHandle.collection('settings');
+  applicationsCollection = databaseHandle.collection('applications');
 
   const savedSettings = await settingsCollection.find({}).toArray();
   for (const document of savedSettings) {
@@ -43,8 +49,22 @@ export async function initializeDatabase() {
     applicationsCollection.createIndex(
       { guild_id: 1, user_id: 1, status: 1, created_at: -1 },
       { name: 'guild_user_status_created' }
-    )
+    ),
+    databaseHandle.collection('moderation_cases').createIndex({ guild_id: 1, user_id: 1, created_at: -1 }),
+    databaseHandle.collection('levels').createIndex({ guild_id: 1, xp: -1 }),
+    databaseHandle.collection('levels').createIndex({ guild_id: 1, user_id: 1 }, { unique: true }),
+    databaseHandle.collection('giveaways').createIndex({ status: 1, ends_at: 1 }),
+    databaseHandle.collection('tickets').createIndex({ guild_id: 1, channel_id: 1 }, { unique: true }),
+    databaseHandle.collection('reminders').createIndex({ delivered: 1, due_at: 1 }),
+    databaseHandle.collection('backups').createIndex({ guild_id: 1, created_at: -1 })
   ]);
+}
+
+export function getCollection(name) {
+  if (!databaseHandle) throw new Error('Database has not been initialized.');
+  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands'];
+  if (!allowed.includes(name)) throw new Error(`Collection ${name} is not available.`);
+  return databaseHandle.collection(name);
 }
 
 function ensureInitialized() {
@@ -149,5 +169,6 @@ export async function closeDatabase() {
   client = null;
   settingsCollection = null;
   applicationsCollection = null;
+  databaseHandle = null;
   settingsCache.clear();
 }

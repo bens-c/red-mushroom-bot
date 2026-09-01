@@ -2,6 +2,7 @@ import {
   ApplicationCommandOptionType,
   ChannelType
 } from 'discord.js';
+import { extraCommands } from './extra-commands.js';
 
 export const commands = [
   {
@@ -28,7 +29,9 @@ export const commands = [
               { name: 'Application reviews', value: 'application_channel' },
               { name: 'Staff movements', value: 'movement_channel' },
               { name: 'Audit log', value: 'log_channel' },
-              { name: 'General announcements', value: 'announcement_channel' }
+              { name: 'General announcements', value: 'announcement_channel' },
+              { name: 'Ticket category', value: 'ticket_category' },
+              { name: 'Ticket transcripts', value: 'transcript_channel' }
             ]
           },
           {
@@ -36,7 +39,7 @@ export const commands = [
             name: 'channel',
             description: 'The destination channel',
             required: true,
-            channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement]
+            channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildCategory]
           }
         ]
       },
@@ -53,7 +56,8 @@ export const commands = [
             choices: [
               { name: 'Bot managers', value: 'manager_role' },
               { name: 'Application reviewers', value: 'reviewer_role' },
-              { name: 'Accepted applicants', value: 'accepted_role' }
+              { name: 'Accepted applicants', value: 'accepted_role' },
+              { name: 'Ticket support staff', value: 'support_role' }
             ]
           },
           { type: ApplicationCommandOptionType.Role, name: 'role', description: 'The role', required: true }
@@ -92,7 +96,14 @@ export const commands = [
         name: 'set-option',
         description: 'Set a yes/no option',
         options: [
-          { type: ApplicationCommandOptionType.String, name: 'key', description: 'Option', required: true, choices: [{ name: 'DM application decisions', value: 'dm_on_decision' }] },
+          { type: ApplicationCommandOptionType.String, name: 'key', description: 'Option', required: true, choices: [
+            { name: 'DM application decisions', value: 'dm_on_decision' },
+            { name: 'Moderation module', value: 'moderation_enabled' },
+            { name: 'XP and levels module', value: 'levels_enabled' },
+            { name: 'Giveaway module', value: 'giveaways_enabled' },
+            { name: 'Ticket module', value: 'tickets_enabled' },
+            { name: 'Backup module', value: 'backups_enabled' }
+          ] },
           { type: ApplicationCommandOptionType.Boolean, name: 'enabled', description: 'Whether the option is enabled', required: true }
         ]
       },
@@ -148,5 +159,6 @@ export const commands = [
       { type: ApplicationCommandOptionType.String, name: 'mention', description: 'Optional safe mention', choices: [{ name: '@everyone', value: 'everyone' }, { name: '@here', value: 'here' }] }
     ]
   },
-  { name: 'help', description: 'Show the bot command guide', dm_permission: false }
+  { name: 'help', description: 'Show the bot command guide', dm_permission: false },
+  ...extraCommands
 ];
