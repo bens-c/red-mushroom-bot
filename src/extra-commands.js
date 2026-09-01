@@ -6,6 +6,13 @@ const reason = { type: ApplicationCommandOptionType.String, name: 'reason', desc
 
 export const extraCommands = [
   {
+    name: 'clear', description: 'Delete recent messages from the current channel', dm_permission: false,
+    options: [
+      { type: ApplicationCommandOptionType.Integer, name: 'amount', description: 'Number of messages to delete (1-100)', required: true, min_value: 1, max_value: 100 },
+      user(false)
+    ]
+  },
+  {
     name: 'moderation', description: 'Moderation, warnings, and message management', dm_permission: false,
     options: [
       { type: ApplicationCommandOptionType.Subcommand, name: 'ban', description: 'Ban a member', options: [user(), reason, { type: ApplicationCommandOptionType.Integer, name: 'delete-days', description: 'Delete recent message history (0-7)', min_value: 0, max_value: 7 }] },

@@ -46,6 +46,7 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/announce`
 - `/help`
 - `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
+- `/clear amount [user]` to quickly delete recent messages
 - `/level rank|leaderboard|manage`
 - `/giveaway start|end|reroll|list`
 - `/ticket panel|close|claim|add|remove|rename|transcript` with a category dropdown panel

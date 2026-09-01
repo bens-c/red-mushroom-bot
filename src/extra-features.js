@@ -55,6 +55,7 @@ async function addCase(interaction, type, userId, reason, metadata = {}) {
 
 export async function handleExtraCommand(interaction, helpers) {
   const handlers = {
+    clear: handleClear,
     moderation: handleModeration,
     level: handleLevel,
     giveaway: handleGiveaway,
@@ -69,7 +70,7 @@ export async function handleExtraCommand(interaction, helpers) {
   const handler = handlers[interaction.commandName];
   if (!handler) return false;
   const settingKey = {
-    moderation: 'moderation_enabled', level: 'levels_enabled', giveaway: 'giveaways_enabled',
+    clear: 'moderation_enabled', moderation: 'moderation_enabled', level: 'levels_enabled', giveaway: 'giveaways_enabled',
     ticket: 'tickets_enabled', backup: 'backups_enabled', sticky: 'sticky_enabled',
     'reaction-role': 'reaction_roles_enabled', automod: 'automod_enabled'
   }[interaction.commandName];
@@ -79,6 +80,24 @@ export async function handleExtraCommand(interaction, helpers) {
   }
   await handler(interaction, helpers);
   return true;
+}
+
+async function handleClear(interaction, helpers) {
+  if (!hasPermission(interaction, PermissionFlagsBits.ManageMessages)) return helpers.replyError(interaction, 'You need Manage Messages to use `/clear`.');
+  const botMember = interaction.guild.members.me;
+  if (!interaction.channel?.isTextBased() || !interaction.channel.messages) return helpers.replyError(interaction, 'Use `/clear` in a text channel.');
+  if (!interaction.channel.permissionsFor(botMember).has(PermissionFlagsBits.ManageMessages)) return helpers.replyError(interaction, 'My bot role needs **Manage Messages** in this channel.');
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const amount = interaction.options.getInteger('amount', true);
+  const targetUser = interaction.options.getUser('user');
+  const messages = await interaction.channel.messages.fetch({ limit: 100 });
+  const selected = targetUser
+    ? messages.filter(message => message.author.id === targetUser.id).first(amount)
+    : messages.first(amount);
+  if (!selected.length) return interaction.editReply(targetUser ? `ℹ️ No recent messages from ${targetUser} were found.` : 'ℹ️ No recent messages were found.');
+  const deleted = await interaction.channel.bulkDelete(selected, true);
+  const filterText = targetUser ? ` from ${targetUser}` : '';
+  return interaction.editReply(`🧹 Deleted **${deleted.size}** message(s)${filterText}. Messages older than 14 days cannot be bulk deleted.`);
 }
 
 async function handleModeration(interaction, helpers) {

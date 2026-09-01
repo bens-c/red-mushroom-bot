@@ -24,7 +24,7 @@ test('registers unique, Discord-sized top-level commands', () => {
 
 test('includes every all-in-one module command group', () => {
   const names = new Set(commands.map(command => command.name));
-  for (const expected of ['application', 'staff-roles', 'moderation', 'level', 'giveaway', 'ticket', 'backup', 'sticky', 'reaction-role', 'automod', 'community']) {
+  for (const expected of ['application', 'staff-roles', 'clear', 'moderation', 'level', 'giveaway', 'ticket', 'backup', 'sticky', 'reaction-role', 'automod', 'community']) {
     assert.ok(names.has(expected), `missing ${expected}`);
   }
 });
