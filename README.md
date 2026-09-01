@@ -48,7 +48,7 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
 - `/level rank|leaderboard|manage`
 - `/giveaway start|end|reroll|list`
-- `/ticket panel|close|claim|add|remove|rename|transcript`
+- `/ticket panel|close|claim|add|remove|rename|transcript` with a category dropdown panel
 - `/backup create|list|restore|delete`
 - `/utility ping|avatar|userinfo|serverinfo|poll|remind|afk|custom-add|custom-run|custom-list|custom-delete`
 - `/sticky set|stop|start|remove|list`

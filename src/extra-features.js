@@ -7,7 +7,8 @@ import {
   ChannelType,
   EmbedBuilder,
   MessageFlags,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  StringSelectMenuBuilder
 } from 'discord.js';
 import { ObjectId } from 'mongodb';
 import { getCollection, getSetting } from './database.js';
@@ -15,6 +16,13 @@ import { handleCommunityCommand } from './community-features.js';
 
 const numberEmoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 const xpCooldowns = new Map();
+const ticketTypes = {
+  general: { label: 'General Support', emoji: '🎫', description: 'Questions, help, or general support', channel: 'support' },
+  report: { label: 'Member Report', emoji: '🚨', description: 'Privately report a member or incident', channel: 'report' },
+  appeal: { label: 'Punishment Appeal', emoji: '🛡️', description: 'Appeal a warning, timeout, kick, or ban', channel: 'appeal' },
+  partnership: { label: 'Partnership', emoji: '🤝', description: 'Discuss a partnership or collaboration', channel: 'partner' },
+  other: { label: 'Other', emoji: '❓', description: 'Anything that does not fit another category', channel: 'other' }
+};
 
 export function parseDuration(input) {
   const match = String(input).trim().toLowerCase().match(/^(\d+)(s|m|h|d|w)$/);
@@ -266,8 +274,19 @@ async function handleTicket(interaction, helpers) {
   if (sub === 'panel') {
     if (!await requirePermission(interaction, PermissionFlagsBits.ManageGuild, helpers)) return;
     const title = interaction.options.getString('title') || 'Support tickets';
-    const description = interaction.options.getString('description') || 'Click below to open a private support ticket.';
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket:create').setLabel('Open ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary));
+    const description = interaction.options.getString('description') || 'Choose a category below to open a private ticket.';
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('ticket:create')
+      .setPlaceholder('Choose a ticket category...')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(Object.entries(ticketTypes).map(([value, type]) => ({
+        label: type.label,
+        value,
+        description: type.description,
+        emoji: type.emoji
+      })));
+    const row = new ActionRowBuilder().addComponents(menu);
     await interaction.channel.send({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle(title).setDescription(description)], components: [row] });
     return interaction.reply({ content: '✅ Ticket panel posted.', flags: MessageFlags.Ephemeral });
   }
@@ -406,25 +425,56 @@ async function handleUtility(interaction, helpers) {
   return interaction.reply({ content: `✅ Custom response \`${name}\` deleted.`, flags: MessageFlags.Ephemeral });
 }
 
+async function createTicket(interaction, helpers, selectedType = 'general') {
+  if (getSetting(interaction.guildId, 'tickets_enabled') !== 'true') return helpers.replyError(interaction, 'The ticket module is disabled.');
+  const existing = await getCollection('tickets').findOne({ guild_id: interaction.guildId, user_id: interaction.user.id, status: 'open' });
+  if (existing) return helpers.replyError(interaction, `You already have an open ticket: <#${existing.channel_id}>`);
+  const type = ticketTypes[selectedType] || ticketTypes.general;
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const supportRole = getSetting(interaction.guildId, 'support_role');
+  const category = getSetting(interaction.guildId, 'ticket_category');
+  const overwrites = [
+    { id: interaction.guildId, deny: [PermissionFlagsBits.ViewChannel] },
+    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: interaction.guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory] }
+  ];
+  if (supportRole) overwrites.push({ id: supportRole, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+  const username = interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 60) || interaction.user.id;
+  const channel = await interaction.guild.channels.create({
+    name: `${type.channel}-${username}`.slice(0, 80),
+    type: ChannelType.GuildText,
+    parent: category || undefined,
+    permissionOverwrites: overwrites,
+    topic: `${type.label} opened by ${interaction.user.tag} (${interaction.user.id})`
+  });
+  await getCollection('tickets').insertOne({
+    guild_id: interaction.guildId,
+    channel_id: channel.id,
+    user_id: interaction.user.id,
+    type: selectedType,
+    type_label: type.label,
+    status: 'open',
+    claimed_by: null,
+    created_at: new Date()
+  });
+  await channel.send({
+    content: `${interaction.user}${supportRole ? ` <@&${supportRole}>` : ''}`,
+    embeds: [(await helpers.brandEmbed(interaction.guildId))
+      .setTitle(`${type.emoji} ${type.label}`)
+      .setDescription(`${type.description}\n\nDescribe what you need help with. Staff can manage this ticket with \`/ticket\`.`)],
+    allowedMentions: { users: [interaction.user.id], roles: supportRole ? [supportRole] : [] }
+  });
+  await interaction.editReply(`✅ **${type.label}** ticket created: ${channel}`);
+  return true;
+}
+
+export async function handleExtraSelect(interaction, helpers) {
+  if (interaction.customId !== 'ticket:create') return false;
+  return createTicket(interaction, helpers, interaction.values[0]);
+}
+
 export async function handleExtraButton(interaction, helpers) {
-  if (interaction.customId === 'ticket:create') {
-    if (getSetting(interaction.guildId, 'tickets_enabled') !== 'true') return helpers.replyError(interaction, 'The ticket module is disabled.');
-    const existing = await getCollection('tickets').findOne({ guild_id: interaction.guildId, user_id: interaction.user.id, status: 'open' });
-    if (existing) return helpers.replyError(interaction, `You already have an open ticket: <#${existing.channel_id}>`);
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const supportRole = getSetting(interaction.guildId, 'support_role');
-    const category = getSetting(interaction.guildId, 'ticket_category');
-    const overwrites = [
-      { id: interaction.guildId, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-      { id: interaction.guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory] }
-    ];
-    if (supportRole) overwrites.push({ id: supportRole, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
-    const channel = await interaction.guild.channels.create({ name: `ticket-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 80), type: ChannelType.GuildText, parent: category || undefined, permissionOverwrites: overwrites, topic: `Ticket opened by ${interaction.user.tag} (${interaction.user.id})` });
-    await getCollection('tickets').insertOne({ guild_id: interaction.guildId, channel_id: channel.id, user_id: interaction.user.id, status: 'open', claimed_by: null, created_at: new Date() });
-    await channel.send({ content: `${interaction.user}${supportRole ? ` <@&${supportRole}>` : ''}`, embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Support ticket').setDescription('Describe what you need help with. Staff can claim and manage this ticket with `/ticket`.')], allowedMentions: { users: [interaction.user.id], roles: supportRole ? [supportRole] : [] } });
-    return interaction.editReply(`✅ Ticket created: ${channel}`);
-  }
+  if (interaction.customId === 'ticket:create') return createTicket(interaction, helpers);
   const match = interaction.customId.match(/^giveaway:enter:([a-f0-9]{24})$/i);
   if (!match) return false;
   const giveaway = await getCollection('giveaways').findOne({ _id: new ObjectId(match[1]), guild_id: interaction.guildId, status: 'active' });

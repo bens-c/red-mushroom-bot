@@ -19,7 +19,7 @@ import {
 } from 'discord.js';
 import { commands } from './commands.js';
 import { handleAutomaticStaffMovement, handleStaffRolesCommand, suppressAutomaticStaffMovement } from './staff-movements.js';
-import { handleExtraButton, handleExtraCommand, handleMessage, startBackgroundJobs } from './extra-features.js';
+import { handleExtraButton, handleExtraCommand, handleExtraSelect, handleMessage, startBackgroundJobs } from './extra-features.js';
 import {
   handleAutoModerationExecution,
   handleDiscordEvent,
@@ -170,6 +170,7 @@ client.on(Events.InteractionCreate, async interaction => {
   try {
     if (interaction.isChatInputCommand()) await handleCommand(interaction);
     else if (interaction.isButton()) await handleButton(interaction);
+    else if (interaction.isStringSelectMenu()) await handleSelectMenu(interaction);
     else if (interaction.isModalSubmit()) await handleModal(interaction);
   } catch (error) {
     const knownErrors = {
@@ -323,6 +324,10 @@ async function handleButton(interaction) {
     new TextInputBuilder().setCustomId('reason').setLabel('Review note / reason').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)
   ));
   return interaction.showModal(modal);
+}
+
+async function handleSelectMenu(interaction) {
+  if (await handleExtraSelect(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
 }
 
 async function handleModal(interaction) {
