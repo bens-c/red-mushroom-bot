@@ -73,5 +73,43 @@ export const extraCommands = [
       { type: ApplicationCommandOptionType.Subcommand, name: 'custom-list', description: 'List custom responses' },
       { type: ApplicationCommandOptionType.Subcommand, name: 'custom-delete', description: 'Delete a custom response', options: [{ type: ApplicationCommandOptionType.String, name: 'name', description: 'Response name', required: true, max_length: 32 }] }
     ]
+  },
+  {
+    name: 'sticky', description: 'Manage persistent sticky messages in channels', dm_permission: false,
+    options: [
+      { type: ApplicationCommandOptionType.Subcommand, name: 'set', description: 'Set or update this channel sticky', options: [{ type: ApplicationCommandOptionType.String, name: 'message', description: 'Sticky message', required: true, max_length: 1900 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'stop', description: 'Pause this channel sticky' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'start', description: 'Resume this channel sticky' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'remove', description: 'Remove this channel sticky configuration' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'list', description: 'List server sticky messages' }
+    ]
+  },
+  {
+    name: 'reaction-role', description: 'Configure reaction-based self roles', dm_permission: false,
+    options: [
+      { type: ApplicationCommandOptionType.Subcommand, name: 'add', description: 'Connect an emoji on a message to a role', options: [{ type: ApplicationCommandOptionType.String, name: 'message-id', description: 'Message ID', required: true }, { type: ApplicationCommandOptionType.Channel, name: 'channel', description: 'Channel containing the message', required: true, channel_types: textChannel }, { type: ApplicationCommandOptionType.String, name: 'emoji', description: 'Unicode or custom server emoji', required: true, max_length: 100 }, { type: ApplicationCommandOptionType.Role, name: 'role', description: 'Role to assign', required: true }, { type: ApplicationCommandOptionType.String, name: 'mode', description: 'How reactions behave', choices: [{ name: 'Normal: add/remove', value: 'normal' }, { name: 'Verify: add only', value: 'verify' }, { name: 'Drop: remove only', value: 'drop' }] }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'remove', description: 'Remove one reaction-role mapping', options: [{ type: ApplicationCommandOptionType.String, name: 'message-id', description: 'Message ID', required: true }, { type: ApplicationCommandOptionType.String, name: 'emoji', description: 'Configured emoji', required: true }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'list', description: 'List configured reaction roles' }
+    ]
+  },
+  {
+    name: 'automod', description: 'Configure Discord native AutoMod rules', dm_permission: false,
+    options: [
+      { type: ApplicationCommandOptionType.Subcommand, name: 'keyword-add', description: 'Block a keyword or phrase', options: [{ type: ApplicationCommandOptionType.String, name: 'keyword', description: 'Keyword, wildcard, or phrase', required: true, max_length: 60 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'keyword-remove', description: 'Remove a blocked keyword', options: [{ type: ApplicationCommandOptionType.String, name: 'keyword', description: 'Exact configured keyword', required: true, max_length: 60 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'spam', description: 'Enable or disable Discord spam detection', options: [{ type: ApplicationCommandOptionType.Boolean, name: 'enabled', description: 'Rule status', required: true }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'mentions', description: 'Configure mention-spam blocking', options: [{ type: ApplicationCommandOptionType.Boolean, name: 'enabled', description: 'Rule status', required: true }, { type: ApplicationCommandOptionType.Integer, name: 'limit', description: 'Maximum mentions per message', min_value: 3, max_value: 50 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'status', description: 'List managed AutoMod rules' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'violations', description: 'Show recent AutoMod actions', options: [user(false)] }
+    ]
+  },
+  {
+    name: 'community', description: 'Starboard, welcome, autorole, and managed embeds', dm_permission: false,
+    options: [
+      { type: ApplicationCommandOptionType.Subcommand, name: 'starboard', description: 'Configure the starboard', options: [{ type: ApplicationCommandOptionType.Channel, name: 'channel', description: 'Starboard channel', required: true, channel_types: textChannel }, { type: ApplicationCommandOptionType.Integer, name: 'threshold', description: 'Reactions required', required: true, min_value: 2, max_value: 50 }, { type: ApplicationCommandOptionType.String, name: 'emoji', description: 'Starboard emoji', max_length: 100 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'welcome-test', description: 'Preview the configured welcome message' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'embed', description: 'Send a managed embed', options: [{ type: ApplicationCommandOptionType.String, name: 'title', description: 'Embed title', required: true, max_length: 256 }, { type: ApplicationCommandOptionType.String, name: 'description', description: 'Embed content; use \\n for new lines', required: true, max_length: 4000 }, { type: ApplicationCommandOptionType.Channel, name: 'channel', description: 'Destination channel', channel_types: textChannel }, { type: ApplicationCommandOptionType.String, name: 'color', description: 'Optional #RRGGBB color', max_length: 7 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'logs', description: 'Show recent AutoMod violations and moderation events', options: [user(false)] }
+    ]
   }
 ];

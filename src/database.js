@@ -16,6 +16,16 @@ const defaultSettings = {
   giveaways_enabled: 'true',
   tickets_enabled: 'true',
   backups_enabled: 'true',
+  sticky_enabled: 'true',
+  reaction_roles_enabled: 'true',
+  automod_enabled: 'true',
+  starboard_enabled: 'true',
+  event_logs_enabled: 'true',
+  welcome_enabled: 'false',
+  welcome_message: 'Welcome {user} to **{server}**! You are member #{member_count}.',
+  leave_message: '**{username}** left **{server}**.',
+  starboard_emoji: '⭐',
+  starboard_threshold: '3',
   movement_template: '{user} was **{action}** by {actor}.\n**Position:** {position}\n**Reason:** {reason}',
   application_accepted_template: 'Congratulations! Your application to **{server}** was accepted.',
   application_rejected_template: 'Thank you for applying to **{server}**. Your application was not accepted this time.'
@@ -56,13 +66,17 @@ export async function initializeDatabase() {
     databaseHandle.collection('giveaways').createIndex({ status: 1, ends_at: 1 }),
     databaseHandle.collection('tickets').createIndex({ guild_id: 1, channel_id: 1 }, { unique: true }),
     databaseHandle.collection('reminders').createIndex({ delivered: 1, due_at: 1 }),
-    databaseHandle.collection('backups').createIndex({ guild_id: 1, created_at: -1 })
+    databaseHandle.collection('backups').createIndex({ guild_id: 1, created_at: -1 }),
+    databaseHandle.collection('stickies').createIndex({ guild_id: 1, channel_id: 1 }, { unique: true }),
+    databaseHandle.collection('reaction_roles').createIndex({ guild_id: 1, message_id: 1, emoji_key: 1 }, { unique: true }),
+    databaseHandle.collection('starboard_entries').createIndex({ guild_id: 1, source_message_id: 1 }, { unique: true }),
+    databaseHandle.collection('automod_violations').createIndex({ guild_id: 1, user_id: 1, created_at: -1 })
   ]);
 }
 
 export function getCollection(name) {
   if (!databaseHandle) throw new Error('Database has not been initialized.');
-  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands'];
+  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations'];
   if (!allowed.includes(name)) throw new Error(`Collection ${name} is not available.`);
   return databaseHandle.collection(name);
 }

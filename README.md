@@ -1,6 +1,6 @@
 # Red Mushroom Staff Bot
 
-A single configurable Discord bot for staff applications, moderation, XP levels, giveaways, tickets, safe server backups, staff movements, announcements, utilities, and audit logging.
+A single configurable Discord bot for staff applications, moderation, XP levels, giveaways, tickets, sticky messages, reaction roles, native AutoMod, starboard, welcome/autoroles, safe server backups, staff movements, announcements, utilities, and audit logging.
 
 ## Requirements
 
@@ -50,10 +50,25 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/ticket panel|close|claim|add|remove|rename|transcript`
 - `/backup create|list|restore|delete`
 - `/utility ping|avatar|userinfo|serverinfo|poll|remind|afk|custom-add|custom-run|custom-list|custom-delete`
+- `/sticky set|stop|start|remove|list`
+- `/reaction-role add|remove|list`
+- `/automod keyword-add|keyword-remove|spam|mentions|status|violations`
+- `/community starboard|welcome-test|embed|logs`
 
 The `/staff` command can add and remove roles in the same action. Its announcement template supports `{user}`, `{actor}`, `{action}`, `{position}`, `{reason}`, and `{server}`. Decision DM templates support `{server}` and `{reason}`.
 
 Configure `ticket_category`, `transcript_channel`, and `support_role` with `/config set-channel` and `/config set-role` before posting a ticket panel. Server backup restore is additive: it creates missing roles/channels and never deletes existing server structures. Type `RESTORE` explicitly when invoking it.
+
+### Sticky messages, roles, and community automation
+
+- Use `/sticky set` in a channel to create a persistent message. It reposts after activity while deleting its previous copy.
+- Use `/reaction-role add` with an existing message ID, channel, emoji, and role. The bot role must be above every self-assignable role.
+- Use `/automod` to manage Discord-native keyword, spam, and mention-spam rules. This works without the privileged Message Content intent.
+- Configure the welcome channel and autorole with `/config set-channel` and `/config set-role`, customize `welcome_message` and `leave_message`, then enable the welcome module with `/config set-option`.
+- Use `/community starboard` to select its channel, emoji, and reaction threshold.
+- Configure `log_channel` and enable event logging to record joins, leaves, deleted/edited messages, role/channel changes, bans, and AutoMod actions.
+
+Welcome templates support `{user}`, `{username}`, `{server}`, and `{member_count}`. Custom responses support `{user}` and `{server}`.
 
 ## MongoDB Atlas
 

@@ -9,6 +9,7 @@ import {
   Events,
   GatewayIntentBits,
   ModalBuilder,
+  Partials,
   PermissionFlagsBits,
   REST,
   Routes,
@@ -17,6 +18,15 @@ import {
 } from 'discord.js';
 import { commands } from './commands.js';
 import { handleExtraButton, handleExtraCommand, handleMessage, startBackgroundJobs } from './extra-features.js';
+import {
+  handleAutoModerationExecution,
+  handleDiscordEvent,
+  handleMemberJoin,
+  handleMemberLeave,
+  handleReactionRole,
+  setManagedAutomodState,
+  handleStickyActivity
+} from './community-features.js';
 import {
   closeDatabase,
   createApplication,
@@ -40,10 +50,21 @@ if (!token || !clientId) {
   process.exit(1);
 }
 
-const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel', 'ticket_category', 'transcript_channel'];
-const roleKeys = ['manager_role', 'reviewer_role', 'accepted_role', 'support_role'];
+const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel', 'ticket_category', 'transcript_channel', 'welcome_channel', 'starboard_channel'];
+const roleKeys = ['manager_role', 'reviewer_role', 'accepted_role', 'support_role', 'autorole_role'];
 const allKeys = [...settingKeys, ...channelKeys, ...roleKeys];
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.AutoModerationConfiguration,
+    GatewayIntentBits.AutoModerationExecution
+  ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction]
+});
 
 function color(guildId) {
   const value = getSetting(guildId, 'brand_color');
@@ -119,7 +140,19 @@ client.once(Events.ClientReady, async readyClient => {
   startBackgroundJobs(readyClient);
 });
 
-client.on(Events.MessageCreate, message => handleMessage(message).catch(console.error));
+client.on(Events.MessageCreate, message => Promise.all([handleMessage(message), handleStickyActivity(message)]).catch(console.error));
+client.on(Events.MessageReactionAdd, (reaction, user) => handleReactionRole(reaction, user, true).catch(console.error));
+client.on(Events.MessageReactionRemove, (reaction, user) => handleReactionRole(reaction, user, false).catch(console.error));
+client.on(Events.GuildMemberAdd, member => handleMemberJoin(member).catch(console.error));
+client.on(Events.GuildMemberRemove, member => handleMemberLeave(member).catch(console.error));
+client.on(Events.AutoModerationActionExecution, execution => handleAutoModerationExecution(execution).catch(console.error));
+client.on(Events.MessageDelete, message => handleDiscordEvent('messageDelete', message).catch(console.error));
+client.on(Events.MessageUpdate, (oldMessage, message) => handleDiscordEvent('messageUpdate', message, oldMessage).catch(console.error));
+client.on(Events.ChannelCreate, channel => handleDiscordEvent('channelCreate', channel).catch(console.error));
+client.on(Events.ChannelDelete, channel => handleDiscordEvent('channelDelete', channel).catch(console.error));
+client.on(Events.GuildRoleCreate, role => handleDiscordEvent('roleCreate', role).catch(console.error));
+client.on(Events.GuildRoleDelete, role => handleDiscordEvent('roleDelete', role).catch(console.error));
+client.on(Events.GuildBanAdd, ban => handleDiscordEvent('banAdd', ban).catch(console.error));
 
 client.on(Events.InteractionCreate, async interaction => {
   try {
@@ -194,6 +227,7 @@ async function handleConfig(interaction) {
   if (subcommand === 'set-option') {
     const key = interaction.options.getString('key', true);
     const enabled = interaction.options.getBoolean('enabled', true);
+    if (key === 'automod_enabled') await setManagedAutomodState(interaction.guild, enabled);
     await setSetting(interaction.guildId, key, String(enabled));
     return interaction.reply({ content: `✅ **${key}** is now **${enabled ? 'enabled' : 'disabled'}**.`, ephemeral: true });
   }
@@ -405,6 +439,7 @@ async function handleHelp(interaction) {
       { name: 'Staff & communication', value: '`/staff` — hire, promote, demote, transfer, leave, resign, or terminate\n`/announce` — post a branded announcement' },
       { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, purge, locks, and slowmode\n`/level` — XP ranks, leaderboard, and XP management\n`/giveaway` — start, end, reroll, and list giveaways' },
       { name: 'Support & safety', value: '`/ticket` — panels, private tickets, claims, members, transcripts, and closing\n`/backup` — create, list, safely restore, and delete server backups\n`/utility` — info, polls, reminders, AFK, and custom responses' },
+      { name: 'Automation & roles', value: '`/sticky` — persistent channel messages\n`/reaction-role` — normal, verify, and drop reaction roles\n`/automod` — native keyword, spam, and mention filters\n`/community` — starboard, welcome preview, embeds, and logs' },
       { name: 'Template placeholders', value: 'Movement: `{user}` `{actor}` `{action}` `{position}` `{reason}` `{server}`\nDecision DMs: `{server}` `{reason}`' }
     );
   return interaction.reply({ embeds: [embed], ephemeral: true });

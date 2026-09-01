@@ -21,3 +21,10 @@ test('registers unique, Discord-sized top-level commands', () => {
     assert.ok(JSON.stringify(command).length < 8000, `${command.name} exceeds Discord's command size limit`);
   }
 });
+
+test('includes every all-in-one module command group', () => {
+  const names = new Set(commands.map(command => command.name));
+  for (const expected of ['application', 'moderation', 'level', 'giveaway', 'ticket', 'backup', 'sticky', 'reaction-role', 'automod', 'community']) {
+    assert.ok(names.has(expected), `missing ${expected}`);
+  }
+});

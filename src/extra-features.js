@@ -10,6 +10,7 @@ import {
 } from 'discord.js';
 import { ObjectId } from 'mongodb';
 import { getCollection, getSetting } from './database.js';
+import { handleCommunityCommand } from './community-features.js';
 
 const numberEmoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 const xpCooldowns = new Map();
@@ -50,13 +51,18 @@ export async function handleExtraCommand(interaction, helpers) {
     giveaway: handleGiveaway,
     ticket: handleTicket,
     backup: handleBackup,
-    utility: handleUtility
+    utility: handleUtility,
+    sticky: handleCommunityCommand,
+    'reaction-role': handleCommunityCommand,
+    automod: handleCommunityCommand,
+    community: handleCommunityCommand
   };
   const handler = handlers[interaction.commandName];
   if (!handler) return false;
   const settingKey = {
     moderation: 'moderation_enabled', level: 'levels_enabled', giveaway: 'giveaways_enabled',
-    ticket: 'tickets_enabled', backup: 'backups_enabled'
+    ticket: 'tickets_enabled', backup: 'backups_enabled', sticky: 'sticky_enabled',
+    'reaction-role': 'reaction_roles_enabled', automod: 'automod_enabled'
   }[interaction.commandName];
   if (settingKey && getSetting(interaction.guildId, settingKey) !== 'true') {
     await helpers.replyError(interaction, `This module is disabled. A manager can enable it with \`/config set-option\`.`);

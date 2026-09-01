@@ -31,7 +31,9 @@ export const commands = [
               { name: 'Audit log', value: 'log_channel' },
               { name: 'General announcements', value: 'announcement_channel' },
               { name: 'Ticket category', value: 'ticket_category' },
-              { name: 'Ticket transcripts', value: 'transcript_channel' }
+              { name: 'Ticket transcripts', value: 'transcript_channel' },
+              { name: 'Welcome and leave messages', value: 'welcome_channel' },
+              { name: 'Starboard', value: 'starboard_channel' }
             ]
           },
           {
@@ -57,7 +59,8 @@ export const commands = [
               { name: 'Bot managers', value: 'manager_role' },
               { name: 'Application reviewers', value: 'reviewer_role' },
               { name: 'Accepted applicants', value: 'accepted_role' },
-              { name: 'Ticket support staff', value: 'support_role' }
+              { name: 'Ticket support staff', value: 'support_role' },
+              { name: 'Automatic member role', value: 'autorole_role' }
             ]
           },
           { type: ApplicationCommandOptionType.Role, name: 'role', description: 'The role', required: true }
@@ -85,7 +88,10 @@ export const commands = [
               { name: 'Application question 5', value: 'application_question_5' },
               { name: 'Movement template', value: 'movement_template' },
               { name: 'Accepted DM template', value: 'application_accepted_template' },
-              { name: 'Rejected DM template', value: 'application_rejected_template' }
+              { name: 'Rejected DM template', value: 'application_rejected_template' },
+              { name: 'Welcome message', value: 'welcome_message' },
+              { name: 'Leave message', value: 'leave_message' },
+              { name: 'Starboard emoji', value: 'starboard_emoji' }
             ]
           },
           { type: ApplicationCommandOptionType.String, name: 'value', description: 'New text (use "off" to disable questions 2-5)', required: true, max_length: 1000 }
@@ -102,7 +108,13 @@ export const commands = [
             { name: 'XP and levels module', value: 'levels_enabled' },
             { name: 'Giveaway module', value: 'giveaways_enabled' },
             { name: 'Ticket module', value: 'tickets_enabled' },
-            { name: 'Backup module', value: 'backups_enabled' }
+            { name: 'Backup module', value: 'backups_enabled' },
+            { name: 'Sticky messages module', value: 'sticky_enabled' },
+            { name: 'Reaction roles module', value: 'reaction_roles_enabled' },
+            { name: 'Native AutoMod module', value: 'automod_enabled' },
+            { name: 'Starboard module', value: 'starboard_enabled' },
+            { name: 'Event logging module', value: 'event_logs_enabled' },
+            { name: 'Welcome and autorole module', value: 'welcome_enabled' }
           ] },
           { type: ApplicationCommandOptionType.Boolean, name: 'enabled', description: 'Whether the option is enabled', required: true }
         ]
