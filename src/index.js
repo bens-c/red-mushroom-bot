@@ -128,11 +128,20 @@ async function replyError(interaction, message) {
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(token);
-  const route = process.env.GUILD_ID
-    ? Routes.applicationGuildCommands(clientId, process.env.GUILD_ID)
+  const guildId = process.env.GUILD_ID?.trim();
+  const route = guildId
+    ? Routes.applicationGuildCommands(clientId, guildId)
     : Routes.applicationCommands(clientId);
   await rest.put(route, { body: commands });
-  console.log(`Registered ${commands.length} ${process.env.GUILD_ID ? 'guild' : 'global'} commands.`);
+  console.log(`Registered ${commands.length} ${guildId ? 'guild' : 'global'} commands.`);
+  if (!guildId) {
+    let clearedGuilds = 0;
+    for (const guild of client.guilds.cache.values()) {
+      await rest.put(Routes.applicationGuildCommands(clientId, guild.id), { body: [] });
+      clearedGuilds += 1;
+    }
+    if (clearedGuilds) console.log(`Cleared stale guild commands in ${clearedGuilds} server(s).`);
+  }
 }
 
 client.once(Events.ClientReady, async readyClient => {
