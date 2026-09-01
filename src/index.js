@@ -8,6 +8,7 @@ import {
   EmbedBuilder,
   Events,
   GatewayIntentBits,
+  MessageFlags,
   ModalBuilder,
   Partials,
   PermissionFlagsBits,
@@ -119,9 +120,9 @@ async function logEvent(guild, title, description) {
 }
 
 async function replyError(interaction, message) {
-  const payload = { content: `❌ ${message}`, ephemeral: true };
-  if (interaction.deferred || interaction.replied) return interaction.editReply(payload);
-  return interaction.reply(payload);
+  const content = `❌ ${message}`;
+  if (interaction.deferred || interaction.replied) return interaction.editReply({ content });
+  return interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
 async function registerCommands() {
@@ -189,7 +190,7 @@ async function handleConfig(interaction) {
     const entries = allKeys.map(key => [key, settings[key] ?? '']);
     const chunks = [];
     for (let i = 0; i < entries.length; i += 8) chunks.push(entries.slice(i, i + 8).map(format).join('\n'));
-    return interaction.reply({ embeds: chunks.map((text, i) => brandEmbed(interaction.guildId).setTitle(i ? 'Configuration (continued)' : 'Server configuration').setDescription(text)), ephemeral: true });
+    return interaction.reply({ embeds: chunks.map((text, i) => brandEmbed(interaction.guildId).setTitle(i ? 'Configuration (continued)' : 'Server configuration').setDescription(text)), flags: MessageFlags.Ephemeral });
   }
 
   if (subcommand === 'set-channel') {
@@ -198,7 +199,7 @@ async function handleConfig(interaction) {
     if (key === 'ticket_category' && channel.type !== ChannelType.GuildCategory) return replyError(interaction, 'Ticket category must be a category channel.');
     if (key !== 'ticket_category' && !channel.isTextBased()) return replyError(interaction, 'This setting requires a text or announcement channel.');
     await setSetting(interaction.guildId, key, channel.id);
-    await interaction.reply({ content: `✅ **${key}** is now ${channel}.`, ephemeral: true });
+    await interaction.reply({ content: `✅ **${key}** is now ${channel}.`, flags: MessageFlags.Ephemeral });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} set **${key}** to ${channel}.`);
   }
 
@@ -207,7 +208,7 @@ async function handleConfig(interaction) {
     const role = interaction.options.getRole('role', true);
     if (role.id === interaction.guildId) return replyError(interaction, 'The @everyone role cannot be used here.');
     await setSetting(interaction.guildId, key, role.id);
-    await interaction.reply({ content: `✅ **${key}** is now ${role}.`, ephemeral: true });
+    await interaction.reply({ content: `✅ **${key}** is now ${role}.`, flags: MessageFlags.Ephemeral });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} set **${key}** to ${role}.`);
   }
 
@@ -220,7 +221,7 @@ async function handleConfig(interaction) {
     if (key === 'brand_name' && value.length > 256) return replyError(interaction, 'Brand name must be 256 characters or fewer.');
     if (key === 'application_title' && value.length > 256) return replyError(interaction, 'Application title must be 256 characters or fewer.');
     await setSetting(interaction.guildId, key, value);
-    await interaction.reply({ content: `✅ **${key}** was updated.`, ephemeral: true });
+    await interaction.reply({ content: `✅ **${key}** was updated.`, flags: MessageFlags.Ephemeral });
     return logEvent(interaction.guild, 'Configuration changed', `${interaction.user} updated **${key}**.`);
   }
 
@@ -229,14 +230,14 @@ async function handleConfig(interaction) {
     const enabled = interaction.options.getBoolean('enabled', true);
     if (key === 'automod_enabled') await setManagedAutomodState(interaction.guild, enabled);
     await setSetting(interaction.guildId, key, String(enabled));
-    return interaction.reply({ content: `✅ **${key}** is now **${enabled ? 'enabled' : 'disabled'}**.`, ephemeral: true });
+    return interaction.reply({ content: `✅ **${key}** is now **${enabled ? 'enabled' : 'disabled'}**.`, flags: MessageFlags.Ephemeral });
   }
 
   if (subcommand === 'reset') {
     const key = interaction.options.getString('key', true);
     if (!allKeys.includes(key)) return replyError(interaction, `Unknown key. Use one shown in \`/config view\`.`);
     await resetSetting(interaction.guildId, key);
-    return interaction.reply({ content: `✅ **${key}** was reset.`, ephemeral: true });
+    return interaction.reply({ content: `✅ **${key}** was reset.`, flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -251,7 +252,7 @@ async function handleApplicationCommand(interaction) {
       new ButtonBuilder().setCustomId('application:start').setLabel('Apply now').setEmoji('📝').setStyle(ButtonStyle.Primary)
     );
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    return interaction.reply({ content: '✅ Application panel posted.', ephemeral: true });
+    return interaction.reply({ content: '✅ Application panel posted.', flags: MessageFlags.Ephemeral });
   }
   if (!isReviewer(interaction)) return replyError(interaction, 'You need the reviewer or manager role.');
   const stats = await getApplicationStats(interaction.guildId);
@@ -262,7 +263,7 @@ async function handleApplicationCommand(interaction) {
       { name: 'Rejected', value: String(stats.rejected || 0), inline: true },
       { name: 'Total', value: String(stats.total || 0), inline: true }
     )],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -311,7 +312,7 @@ async function handleModal(interaction) {
 }
 
 async function submitApplication(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
   const answers = [];
   for (let i = 1; i <= 5; i += 1) {
@@ -340,7 +341,7 @@ async function submitApplication(interaction) {
 
 async function decideApplication(interaction, decision, id) {
   if (!isReviewer(interaction)) return replyError(interaction, 'You need the reviewer or manager role.');
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const status = decision === 'accept' ? 'accepted' : 'rejected';
   const reason = interaction.fields.getTextInputValue('reason').trim();
   if (!await reviewApplication(id, interaction.guildId, status, interaction.user.id, reason)) return replyError(interaction, 'This application has already been reviewed.');
@@ -380,7 +381,7 @@ async function handleStaff(interaction) {
   const reason = interaction.options.getString('reason', true);
   const addRole = interaction.options.getRole('add-role');
   const removeRole = interaction.options.getRole('remove-role');
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const destination = await getTextChannel(interaction.guild, 'movement_channel');
   if (!destination) return replyError(interaction, 'Set a staff movement channel with `/config set-channel` first.');
   if (addRole && !addRole.editable) return replyError(interaction, `I cannot add **${addRole.name}**. Move my bot role above it.`);
@@ -425,7 +426,7 @@ async function handleAnnouncement(interaction) {
     embeds: [brandEmbed(interaction.guildId).setTitle(title).setDescription(message)],
     allowedMentions: { parse: mention ? ['everyone'] : [] }
   });
-  await interaction.reply({ content: `✅ Announcement sent to ${channel}.`, ephemeral: true });
+  await interaction.reply({ content: `✅ Announcement sent to ${channel}.`, flags: MessageFlags.Ephemeral });
   return logEvent(interaction.guild, 'Announcement sent', `${interaction.user} sent **${title}** in ${channel}.`);
 }
 
@@ -442,7 +443,7 @@ async function handleHelp(interaction) {
       { name: 'Automation & roles', value: '`/sticky` — persistent channel messages\n`/reaction-role` — normal, verify, and drop reaction roles\n`/automod` — native keyword, spam, and mention filters\n`/community` — starboard, welcome preview, embeds, and logs' },
       { name: 'Template placeholders', value: 'Movement: `{user}` `{actor}` `{action}` `{position}` `{reason}` `{server}`\nDecision DMs: `{server}` `{reason}`' }
     );
-  return interaction.reply({ embeds: [embed], ephemeral: true });
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 process.on('SIGINT', async () => {

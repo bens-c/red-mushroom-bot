@@ -3,6 +3,7 @@ import {
   AutoModerationRuleEventType,
   AutoModerationRuleTriggerType,
   EmbedBuilder,
+  MessageFlags,
   PermissionFlagsBits
 } from 'discord.js';
 import { getCollection, getSetting, setSetting } from './database.js';
@@ -64,24 +65,24 @@ async function handleSticky(interaction, helpers) {
   if (sub === 'list') {
     const rows = await stickies.find({ guild_id: interaction.guildId }).sort({ channel_id: 1 }).toArray();
     const text = rows.length ? rows.map(row => `• <#${row.channel_id}> — ${row.active ? 'active' : 'paused'} — ${row.content.slice(0, 80)}`).join('\n') : 'No sticky messages configured.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Sticky messages').setDescription(text.slice(0, 4096))], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Sticky messages').setDescription(text.slice(0, 4096))], flags: MessageFlags.Ephemeral });
   }
   const sticky = await stickies.findOne({ guild_id: interaction.guildId, channel_id: interaction.channelId });
   if (sub === 'remove') {
     if (sticky?.last_message_id) await interaction.channel.messages.delete(sticky.last_message_id).catch(() => {});
     await stickies.deleteOne({ guild_id: interaction.guildId, channel_id: interaction.channelId });
-    return interaction.reply({ content: '✅ Sticky removed.', ephemeral: true });
+    return interaction.reply({ content: '✅ Sticky removed.', flags: MessageFlags.Ephemeral });
   }
   if (sub === 'stop') {
     if (!sticky) return helpers.replyError(interaction, 'This channel has no sticky message.');
     await stickies.updateOne({ _id: sticky._id }, { $set: { active: false } });
-    return interaction.reply({ content: '✅ Sticky paused.', ephemeral: true });
+    return interaction.reply({ content: '✅ Sticky paused.', flags: MessageFlags.Ephemeral });
   }
   if (sub === 'start') {
     if (!sticky) return helpers.replyError(interaction, 'This channel has no saved sticky message.');
     await stickies.updateOne({ _id: sticky._id }, { $set: { active: true } });
     await sendSticky(interaction.channel, { ...sticky, active: true });
-    return interaction.reply({ content: '✅ Sticky resumed.', ephemeral: true });
+    return interaction.reply({ content: '✅ Sticky resumed.', flags: MessageFlags.Ephemeral });
   }
   const content = interaction.options.getString('message', true);
   await stickies.updateOne(
@@ -91,7 +92,7 @@ async function handleSticky(interaction, helpers) {
   );
   const saved = await stickies.findOne({ guild_id: interaction.guildId, channel_id: interaction.channelId });
   await sendSticky(interaction.channel, saved);
-  return interaction.reply({ content: '✅ Sticky message saved.', ephemeral: true });
+  return interaction.reply({ content: '✅ Sticky message saved.', flags: MessageFlags.Ephemeral });
 }
 
 async function handleReactionRoleCommand(interaction, helpers) {
@@ -102,14 +103,14 @@ async function handleReactionRoleCommand(interaction, helpers) {
   if (sub === 'list') {
     const rows = await mappings.find({ guild_id: interaction.guildId }).limit(50).toArray();
     const text = rows.length ? rows.map(row => `• [message](https://discord.com/channels/${interaction.guildId}/${row.channel_id}/${row.message_id}) ${row.emoji_display} → <@&${row.role_id}> (${row.mode})`).join('\n') : 'No reaction roles configured.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Reaction roles').setDescription(text.slice(0, 4096))], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Reaction roles').setDescription(text.slice(0, 4096))], flags: MessageFlags.Ephemeral });
   }
   const messageId = interaction.options.getString('message-id', true);
   const emoji = interaction.options.getString('emoji', true);
   const key = emojiKey(emoji);
   if (sub === 'remove') {
     const result = await mappings.deleteOne({ guild_id: interaction.guildId, message_id: messageId, emoji_key: key });
-    return interaction.reply({ content: result.deletedCount ? '✅ Reaction-role mapping removed.' : '❌ Mapping not found.', ephemeral: true });
+    return interaction.reply({ content: result.deletedCount ? '✅ Reaction-role mapping removed.' : '❌ Mapping not found.', flags: MessageFlags.Ephemeral });
   }
   const channel = interaction.options.getChannel('channel', true);
   const role = interaction.options.getRole('role', true);
@@ -124,7 +125,7 @@ async function handleReactionRoleCommand(interaction, helpers) {
     { $set: { channel_id: channel.id, role_id: role.id, emoji_display: emoji, mode: interaction.options.getString('mode') || 'normal', updated_by: interaction.user.id, updated_at: new Date() } },
     { upsert: true }
   );
-  return interaction.reply({ content: `✅ ${emoji} now controls ${role}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ ${emoji} now controls ${role}.`, flags: MessageFlags.Ephemeral });
 }
 
 async function managedRule(guild, name) {
@@ -143,10 +144,18 @@ function blockAction(label) {
 }
 
 async function upsertRule(guild, name, data) {
-  const current = await managedRule(guild, name);
+  const rules = await guild.autoModerationRules.fetch();
+  const current = rules.find(rule => rule.name === name) || null;
   if (current) {
     const { triggerType: _unchangedTriggerType, ...editableData } = data;
     return current.edit(editableData);
+  }
+  const hasSingleRuleLimit = [AutoModerationRuleTriggerType.Spam, AutoModerationRuleTriggerType.MentionSpam].includes(data.triggerType);
+  const conflictingRule = hasSingleRuleLimit ? rules.find(rule => rule.triggerType === data.triggerType) : null;
+  if (conflictingRule) {
+    const error = new Error(`Discord already has the rule “${conflictingRule.name}” for this trigger type.`);
+    error.code = 'AUTOMOD_TRIGGER_TYPE_EXISTS';
+    throw error;
   }
   return guild.autoModerationRules.create({ name, eventType: AutoModerationRuleEventType.MessageSend, ...data });
 }
@@ -159,14 +168,14 @@ async function handleAutomod(interaction, helpers) {
     const rules = await interaction.guild.autoModerationRules.fetch();
     const managed = rules.filter(rule => Object.values(ruleNames).includes(rule.name));
     const text = managed.size ? managed.map(rule => `• **${rule.name}** — ${rule.enabled ? 'enabled' : 'disabled'} — ${AutoModerationRuleTriggerType[rule.triggerType]}`).join('\n') : 'No managed AutoMod rules yet.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Native AutoMod status').setDescription(text)], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Native AutoMod status').setDescription(text)], flags: MessageFlags.Ephemeral });
   }
   if (sub === 'violations') {
     const user = interaction.options.getUser('user');
     const query = { guild_id: interaction.guildId, ...(user ? { user_id: user.id } : {}) };
     const rows = await getCollection('automod_violations').find(query).sort({ created_at: -1 }).limit(20).toArray();
     const text = rows.length ? rows.map(row => `• <@${row.user_id}> — **${row.rule_name}** in <#${row.channel_id}> <t:${Math.floor(row.created_at.getTime() / 1000)}:R>`).join('\n') : 'No recorded violations.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('AutoMod violations').setDescription(text.slice(0, 4096))], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('AutoMod violations').setDescription(text.slice(0, 4096))], flags: MessageFlags.Ephemeral });
   }
   if (sub === 'keyword-add' || sub === 'keyword-remove') {
     const keyword = interaction.options.getString('keyword', true).trim();
@@ -175,16 +184,23 @@ async function handleAutomod(interaction, helpers) {
     const updated = sub === 'keyword-add' ? [...new Set([...keywords, keyword])] : keywords.filter(item => item !== keyword);
     if (updated.length > 1000) return helpers.replyError(interaction, 'Discord allows at most 1,000 keyword entries.');
     await upsertRule(interaction.guild, ruleNames.keywords, { triggerType: AutoModerationRuleTriggerType.Keyword, triggerMetadata: { keywordFilter: updated }, actions: blockAction('the keyword filter'), enabled: true, reason: `Changed by ${interaction.user.tag}` });
-    return interaction.reply({ content: `✅ Keyword filter updated (${updated.length} entries).`, ephemeral: true });
+    return interaction.reply({ content: `✅ Keyword filter updated (${updated.length} entries).`, flags: MessageFlags.Ephemeral });
   }
   const enabled = interaction.options.getBoolean('enabled', true);
-  if (sub === 'spam') {
-    await upsertRule(interaction.guild, ruleNames.spam, { triggerType: AutoModerationRuleTriggerType.Spam, actions: blockAction('spam detection'), enabled, reason: `Changed by ${interaction.user.tag}` });
-  } else {
-    const limit = interaction.options.getInteger('limit') || 5;
-    await upsertRule(interaction.guild, ruleNames.mentions, { triggerType: AutoModerationRuleTriggerType.MentionSpam, triggerMetadata: { mentionTotalLimit: limit, mentionRaidProtectionEnabled: true }, actions: blockAction('mention-spam detection'), enabled, reason: `Changed by ${interaction.user.tag}` });
+  try {
+    if (sub === 'spam') {
+      await upsertRule(interaction.guild, ruleNames.spam, { triggerType: AutoModerationRuleTriggerType.Spam, actions: blockAction('spam detection'), enabled, reason: `Changed by ${interaction.user.tag}` });
+    } else {
+      const limit = interaction.options.getInteger('limit') || 5;
+      await upsertRule(interaction.guild, ruleNames.mentions, { triggerType: AutoModerationRuleTriggerType.MentionSpam, triggerMetadata: { mentionTotalLimit: limit, mentionRaidProtectionEnabled: true }, actions: blockAction('mention-spam detection'), enabled, reason: `Changed by ${interaction.user.tag}` });
+    }
+  } catch (error) {
+    if (error.code === 'AUTOMOD_TRIGGER_TYPE_EXISTS') {
+      return helpers.replyError(interaction, `${error.message} Discord permits only one rule of this type. Delete or disable the existing rule in **Server Settings → AutoMod**, or use \`/automod keyword-add\` to activate this bot's AutoMod integration.`);
+    }
+    throw error;
   }
-  return interaction.reply({ content: `✅ ${sub} AutoMod rule ${enabled ? 'enabled' : 'disabled'}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ ${sub} AutoMod rule ${enabled ? 'enabled' : 'disabled'}.`, flags: MessageFlags.Ephemeral });
 }
 
 async function handleCommunity(interaction, helpers) {
@@ -201,7 +217,7 @@ async function handleCommunity(interaction, helpers) {
       ...cases.map(row => `• **${row.type}** <@${row.user_id}> — ${row.reason}`),
       ...violations.map(row => `• **AutoMod** <@${row.user_id}> — ${row.rule_name}`)
     ].slice(0, 20);
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Community logs').setDescription(lines.join('\n').slice(0, 4096) || 'No records found.')], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Community logs').setDescription(lines.join('\n').slice(0, 4096) || 'No records found.')], flags: MessageFlags.Ephemeral });
   }
   if (!await requireManager(interaction, helpers)) return;
   if (sub === 'starboard') {
@@ -214,7 +230,7 @@ async function handleCommunity(interaction, helpers) {
       setSetting(interaction.guildId, 'starboard_emoji', emoji),
       setSetting(interaction.guildId, 'starboard_enabled', 'true')
     ]);
-    return interaction.reply({ content: `✅ Starboard configured in ${channel}: ${emoji} × ${threshold}.`, ephemeral: true });
+    return interaction.reply({ content: `✅ Starboard configured in ${channel}: ${emoji} × ${threshold}.`, flags: MessageFlags.Ephemeral });
   }
   if (sub === 'welcome-test') {
     const channelId = getSetting(interaction.guildId, 'welcome_channel');
@@ -222,7 +238,7 @@ async function handleCommunity(interaction, helpers) {
     if (!channel?.isTextBased()) return helpers.replyError(interaction, 'Configure a welcome text channel first.');
     const content = render(getSetting(interaction.guildId, 'welcome_message'), { user: interaction.user, username: interaction.user.username, server: interaction.guild.name, member_count: interaction.guild.memberCount });
     await channel.send({ content, allowedMentions: { users: [interaction.user.id] } });
-    return interaction.reply({ content: `✅ Welcome preview sent to ${channel}.`, ephemeral: true });
+    return interaction.reply({ content: `✅ Welcome preview sent to ${channel}.`, flags: MessageFlags.Ephemeral });
   }
   const title = interaction.options.getString('title', true);
   const description = interaction.options.getString('description', true).replaceAll('\\n', '\n');
@@ -232,7 +248,7 @@ async function handleCommunity(interaction, helpers) {
   const embed = (await helpers.brandEmbed(interaction.guildId)).setTitle(title).setDescription(description);
   if (inputColor) embed.setColor(Number.parseInt(inputColor.slice(1), 16));
   await channel.send({ embeds: [embed] });
-  return interaction.reply({ content: `✅ Embed sent to ${channel}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ Embed sent to ${channel}.`, flags: MessageFlags.Ephemeral });
 }
 
 export async function handleStickyActivity(message) {

@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   ChannelType,
   EmbedBuilder,
+  MessageFlags,
   PermissionFlagsBits
 } from 'discord.js';
 import { ObjectId } from 'mongodb';
@@ -81,12 +82,12 @@ async function handleModeration(interaction, helpers) {
   if (sub === 'warnings') {
     const warnings = await getCollection('moderation_cases').find({ guild_id: interaction.guildId, user_id: targetUser.id, type: 'warn' }).sort({ created_at: -1 }).limit(15).toArray();
     const text = warnings.length ? warnings.map((item, i) => `**${i + 1}.** ${item.reason} — <@${item.moderator_id}> <t:${Math.floor(item.created_at.getTime() / 1000)}:R>`).join('\n') : 'No warnings found.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle(`Warnings • ${targetUser.username}`).setDescription(text)], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle(`Warnings • ${targetUser.username}`).setDescription(text)], flags: MessageFlags.Ephemeral });
   }
 
   if (sub === 'purge') {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageMessages)) return helpers.replyError(interaction, 'You need Manage Messages.');
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const amount = interaction.options.getInteger('amount', true);
     const messages = await interaction.channel.messages.fetch({ limit: 100 });
     const selected = targetUser ? messages.filter(message => message.author.id === targetUser.id).first(amount) : messages.first(amount);
@@ -98,20 +99,20 @@ async function handleModeration(interaction, helpers) {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageChannels)) return helpers.replyError(interaction, 'You need Manage Channels.');
     await interaction.channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: sub === 'lock' ? false : null }, { reason });
     await addCase(interaction, sub, interaction.guildId, reason, { channel_id: interaction.channelId });
-    return interaction.reply({ content: `✅ Channel ${sub === 'lock' ? 'locked' : 'unlocked'}.`, ephemeral: true });
+    return interaction.reply({ content: `✅ Channel ${sub === 'lock' ? 'locked' : 'unlocked'}.`, flags: MessageFlags.Ephemeral });
   }
 
   if (sub === 'slowmode') {
     if (!hasPermission(interaction, PermissionFlagsBits.ManageChannels)) return helpers.replyError(interaction, 'You need Manage Channels.');
     const seconds = interaction.options.getInteger('seconds', true);
     await interaction.channel.setRateLimitPerUser(seconds, `Changed by ${interaction.user.tag}`);
-    return interaction.reply({ content: `✅ Slowmode set to ${seconds} seconds.`, ephemeral: true });
+    return interaction.reply({ content: `✅ Slowmode set to ${seconds} seconds.`, flags: MessageFlags.Ephemeral });
   }
 
   if (sub === 'clear-warnings') {
     const result = await getCollection('moderation_cases').deleteMany({ guild_id: interaction.guildId, user_id: targetUser.id, type: 'warn' });
     await addCase(interaction, 'clear-warnings', targetUser.id, reason, { cleared: result.deletedCount });
-    return interaction.reply({ content: `✅ Cleared ${result.deletedCount} warnings for ${targetUser}.`, ephemeral: true });
+    return interaction.reply({ content: `✅ Cleared ${result.deletedCount} warnings for ${targetUser}.`, flags: MessageFlags.Ephemeral });
   }
 
   const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
@@ -136,7 +137,7 @@ async function handleModeration(interaction, helpers) {
   await addCase(interaction, sub, targetUser.id, reason);
   await helpers.logEvent(interaction.guild, `Moderation • ${sub}`, `${targetUser} was **${sub}** by ${interaction.user}.\n**Reason:** ${reason}`);
   const completedAction = { ban: 'banned', kick: 'kicked', timeout: 'timed out/updated', warn: 'warned' }[sub];
-  return interaction.reply({ content: `✅ ${targetUser} was ${completedAction}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ ${targetUser} was ${completedAction}.`, flags: MessageFlags.Ephemeral });
 }
 
 function levelFromXp(xp) {
@@ -165,7 +166,7 @@ async function handleLevel(interaction, helpers) {
   const update = action === 'set' ? { $set: { xp: amount } } : { $inc: { xp: action === 'add' ? amount : -amount } };
   await levels.updateOne({ guild_id: interaction.guildId, user_id: user.id }, { ...update, $setOnInsert: { guild_id: interaction.guildId, user_id: user.id } }, { upsert: true });
   await levels.updateOne({ guild_id: interaction.guildId, user_id: user.id, xp: { $lt: 0 } }, { $set: { xp: 0 } });
-  return interaction.reply({ content: `✅ XP ${action} operation completed for ${user}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ XP ${action} operation completed for ${user}.`, flags: MessageFlags.Ephemeral });
 }
 
 async function findGiveaway(guildId, identifier) {
@@ -209,7 +210,7 @@ async function handleGiveaway(interaction, helpers) {
   if (sub === 'list') {
     const rows = await getCollection('giveaways').find({ guild_id: interaction.guildId, status: 'active' }).sort({ ends_at: 1 }).limit(20).toArray();
     const text = rows.length ? rows.map(row => `• **${row.prize}** — \`${row._id}\` — <t:${Math.floor(row.ends_at.getTime() / 1000)}:R>`).join('\n') : 'No active giveaways.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Active giveaways').setDescription(text)], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Active giveaways').setDescription(text)], flags: MessageFlags.Ephemeral });
   }
   if (!await requirePermission(interaction, PermissionFlagsBits.ManageEvents, helpers)) return;
   if (sub === 'start') {
@@ -223,7 +224,7 @@ async function handleGiveaway(interaction, helpers) {
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`giveaway:enter:${result.insertedId}`).setLabel('Enter giveaway').setEmoji('🎉').setStyle(ButtonStyle.Success));
     const message = await channel.send({ embeds: [embed], components: [row] });
     await getCollection('giveaways').updateOne({ _id: result.insertedId }, { $set: { message_id: message.id } });
-    return interaction.reply({ content: `✅ Giveaway started in ${channel}. ID: \`${result.insertedId}\``, ephemeral: true });
+    return interaction.reply({ content: `✅ Giveaway started in ${channel}. ID: \`${result.insertedId}\``, flags: MessageFlags.Ephemeral });
   }
   const giveaway = await findGiveaway(interaction.guildId, interaction.options.getString('id', true));
   if (!giveaway) return helpers.replyError(interaction, 'Giveaway not found.');
@@ -234,7 +235,7 @@ async function handleGiveaway(interaction, helpers) {
     if (giveaway.status !== 'ended') return helpers.replyError(interaction, 'Only ended giveaways can be rerolled.');
     await finishGiveaway(interaction.client, giveaway, true);
   }
-  return interaction.reply({ content: `✅ Giveaway ${sub === 'end' ? 'ended' : 'rerolled'}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ Giveaway ${sub === 'end' ? 'ended' : 'rerolled'}.`, flags: MessageFlags.Ephemeral });
 }
 
 async function currentTicket(interaction) {
@@ -255,7 +256,7 @@ async function handleTicket(interaction, helpers) {
     const description = interaction.options.getString('description') || 'Click below to open a private support ticket.';
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket:create').setLabel('Open ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary));
     await interaction.channel.send({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle(title).setDescription(description)], components: [row] });
-    return interaction.reply({ content: '✅ Ticket panel posted.', ephemeral: true });
+    return interaction.reply({ content: '✅ Ticket panel posted.', flags: MessageFlags.Ephemeral });
   }
   const ticket = await currentTicket(interaction);
   if (!ticket) return helpers.replyError(interaction, 'This command must be used inside an open ticket.');
@@ -263,12 +264,12 @@ async function handleTicket(interaction, helpers) {
   const supportRole = getSetting(interaction.guildId, 'support_role');
   const isSupport = helpers.isReviewer(interaction) || Boolean(supportRole && interaction.member.roles.cache.has(supportRole));
   if (!isOwner && !isSupport) return helpers.replyError(interaction, 'Only the ticket owner or support staff can do that.');
-  if (sub === 'transcript') return interaction.reply({ files: [await createTranscript(interaction.channel)], ephemeral: true });
+  if (sub === 'transcript') return interaction.reply({ files: [await createTranscript(interaction.channel)], flags: MessageFlags.Ephemeral });
   if (sub === 'add' || sub === 'remove') {
     if (!isSupport) return helpers.replyError(interaction, 'Only support staff can manage ticket members.');
     const user = interaction.options.getUser('user', true);
     await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: sub === 'add' ? true : null, SendMessages: sub === 'add' ? true : null });
-    return interaction.reply({ content: `✅ ${user} was ${sub === 'add' ? 'added to' : 'removed from'} the ticket.`, ephemeral: true });
+    return interaction.reply({ content: `✅ ${user} was ${sub === 'add' ? 'added to' : 'removed from'} the ticket.`, flags: MessageFlags.Ephemeral });
   }
   if (sub === 'claim') {
     if (!isSupport) return helpers.replyError(interaction, 'Only support staff can claim tickets.');
@@ -278,7 +279,7 @@ async function handleTicket(interaction, helpers) {
   if (sub === 'rename') {
     if (!isSupport) return helpers.replyError(interaction, 'Only support staff can rename tickets.');
     await interaction.channel.setName(interaction.options.getString('name', true));
-    return interaction.reply({ content: '✅ Ticket renamed.', ephemeral: true });
+    return interaction.reply({ content: '✅ Ticket renamed.', flags: MessageFlags.Ephemeral });
   }
   const transcript = await createTranscript(interaction.channel);
   const transcriptChannelId = getSetting(interaction.guildId, 'transcript_channel');
@@ -294,7 +295,7 @@ async function handleBackup(interaction, helpers) {
   const sub = interaction.options.getSubcommand();
   const backups = getCollection('backups');
   if (sub === 'create') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const roles = interaction.guild.roles.cache.filter(role => role.id !== interaction.guildId && !role.managed).map(role => ({ name: role.name, color: role.hexColor, hoist: role.hoist, mentionable: role.mentionable, permissions: role.permissions.bitfield.toString(), position: role.position }));
     const channels = interaction.guild.channels.cache.map(channel => ({ name: channel.name, type: channel.type, parent_name: channel.parent?.name || null, position: channel.position, topic: 'topic' in channel ? channel.topic : null, nsfw: 'nsfw' in channel ? channel.nsfw : false, rate_limit: 'rateLimitPerUser' in channel ? channel.rateLimitPerUser : 0 }));
     const result = await backups.insertOne({ guild_id: interaction.guildId, name: interaction.options.getString('name', true), created_by: interaction.user.id, created_at: new Date(), roles, channels });
@@ -303,7 +304,7 @@ async function handleBackup(interaction, helpers) {
   if (sub === 'list') {
     const rows = await backups.find({ guild_id: interaction.guildId }).sort({ created_at: -1 }).limit(20).toArray();
     const text = rows.length ? rows.map(row => `• **${row.name}** — \`${row._id}\` — <t:${Math.floor(row.created_at.getTime() / 1000)}:R>`).join('\n') : 'No backups stored.';
-    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Server backups').setDescription(text)], ephemeral: true });
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Server backups').setDescription(text)], flags: MessageFlags.Ephemeral });
   }
   const id = interaction.options.getString('id', true);
   if (!/^[a-f0-9]{24}$/i.test(id)) return helpers.replyError(interaction, 'Invalid backup ID.');
@@ -311,10 +312,10 @@ async function handleBackup(interaction, helpers) {
   if (!backup) return helpers.replyError(interaction, 'Backup not found.');
   if (sub === 'delete') {
     await backups.deleteOne({ _id: backup._id });
-    return interaction.reply({ content: '✅ Backup deleted.', ephemeral: true });
+    return interaction.reply({ content: '✅ Backup deleted.', flags: MessageFlags.Ephemeral });
   }
   if (interaction.options.getString('confirmation', true) !== 'RESTORE') return helpers.replyError(interaction, 'Type `RESTORE` exactly to confirm.');
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   let roleCount = 0;
   for (const role of [...backup.roles].sort((a, b) => a.position - b.position)) {
     if (interaction.guild.roles.cache.some(existing => existing.name === role.name)) continue;
@@ -339,7 +340,7 @@ async function handleBackup(interaction, helpers) {
 
 async function handleUtility(interaction, helpers) {
   const sub = interaction.options.getSubcommand();
-  if (sub === 'ping') return interaction.reply({ content: `🏓 Gateway: ${interaction.client.ws.ping}ms • Uptime: ${Math.floor(process.uptime())}s`, ephemeral: true });
+  if (sub === 'ping') return interaction.reply({ content: `🏓 Gateway: ${interaction.client.ws.ping}ms • Uptime: ${Math.floor(process.uptime())}s`, flags: MessageFlags.Ephemeral });
   if (sub === 'avatar') {
     const user = interaction.options.getUser('user') || interaction.user;
     return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle(`${user.username}'s avatar`).setImage(user.displayAvatarURL({ size: 4096 }))] });
@@ -357,19 +358,19 @@ async function handleUtility(interaction, helpers) {
     const question = interaction.options.getString('question', true);
     const message = await interaction.channel.send({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle(question.slice(0, 256)).setDescription(`${question.length > 256 ? `${question}\n\n` : ''}${description}`).setFooter({ text: `Poll by ${interaction.user.tag}` })] });
     for (let i = 0; i < choices.length; i += 1) await message.react(numberEmoji[i]);
-    return interaction.reply({ content: `✅ Poll posted: ${message.url}`, ephemeral: true });
+    return interaction.reply({ content: `✅ Poll posted: ${message.url}`, flags: MessageFlags.Ephemeral });
   }
   if (sub === 'remind') {
     const duration = parseDuration(interaction.options.getString('duration', true));
     if (!duration || duration < 10_000 || duration > 365 * 86400000) return helpers.replyError(interaction, 'Duration must be between 10 seconds and 365 days.');
     await getCollection('reminders').insertOne({ user_id: interaction.user.id, guild_id: interaction.guildId, channel_id: interaction.channelId, message: interaction.options.getString('message', true), due_at: new Date(Date.now() + duration), delivered: false, created_at: new Date() });
-    return interaction.reply({ content: `✅ I will remind you <t:${Math.floor((Date.now() + duration) / 1000)}:R>.`, ephemeral: true });
+    return interaction.reply({ content: `✅ I will remind you <t:${Math.floor((Date.now() + duration) / 1000)}:R>.`, flags: MessageFlags.Ephemeral });
   }
   if (sub === 'afk') {
     const status = interaction.options.getString('status', true);
     if (status.toLowerCase() === 'off') await getCollection('afk').deleteOne({ guild_id: interaction.guildId, user_id: interaction.user.id });
     else await getCollection('afk').updateOne({ guild_id: interaction.guildId, user_id: interaction.user.id }, { $set: { status, since: new Date() } }, { upsert: true });
-    return interaction.reply({ content: `✅ AFK ${status.toLowerCase() === 'off' ? 'cleared' : 'set'}.`, ephemeral: true });
+    return interaction.reply({ content: `✅ AFK ${status.toLowerCase() === 'off' ? 'cleared' : 'set'}.`, flags: MessageFlags.Ephemeral });
   }
   const commands = getCollection('custom_commands');
   const name = interaction.options.getString('name')?.toLowerCase();
@@ -380,16 +381,16 @@ async function handleUtility(interaction, helpers) {
   }
   if (sub === 'custom-list') {
     const rows = await commands.find({ guild_id: interaction.guildId }).sort({ name: 1 }).limit(50).toArray();
-    return interaction.reply({ content: rows.length ? rows.map(row => `\`${row.name}\``).join(', ') : 'No custom responses.', ephemeral: true });
+    return interaction.reply({ content: rows.length ? rows.map(row => `\`${row.name}\``).join(', ') : 'No custom responses.', flags: MessageFlags.Ephemeral });
   }
   if (!await requirePermission(interaction, PermissionFlagsBits.ManageGuild, helpers)) return;
   if (!/^[a-z0-9_-]{1,32}$/.test(name)) return helpers.replyError(interaction, 'Names may only contain lowercase letters, numbers, `_`, and `-`.');
   if (sub === 'custom-add') {
     await commands.updateOne({ guild_id: interaction.guildId, name }, { $set: { response: interaction.options.getString('response', true), updated_by: interaction.user.id, updated_at: new Date() } }, { upsert: true });
-    return interaction.reply({ content: `✅ Custom response \`${name}\` saved.`, ephemeral: true });
+    return interaction.reply({ content: `✅ Custom response \`${name}\` saved.`, flags: MessageFlags.Ephemeral });
   }
   await commands.deleteOne({ guild_id: interaction.guildId, name });
-  return interaction.reply({ content: `✅ Custom response \`${name}\` deleted.`, ephemeral: true });
+  return interaction.reply({ content: `✅ Custom response \`${name}\` deleted.`, flags: MessageFlags.Ephemeral });
 }
 
 export async function handleExtraButton(interaction, helpers) {
@@ -397,7 +398,7 @@ export async function handleExtraButton(interaction, helpers) {
     if (getSetting(interaction.guildId, 'tickets_enabled') !== 'true') return helpers.replyError(interaction, 'The ticket module is disabled.');
     const existing = await getCollection('tickets').findOne({ guild_id: interaction.guildId, user_id: interaction.user.id, status: 'open' });
     if (existing) return helpers.replyError(interaction, `You already have an open ticket: <#${existing.channel_id}>`);
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const supportRole = getSetting(interaction.guildId, 'support_role');
     const category = getSetting(interaction.guildId, 'ticket_category');
     const overwrites = [
@@ -417,7 +418,7 @@ export async function handleExtraButton(interaction, helpers) {
   if (!giveaway || giveaway.ends_at <= new Date()) return helpers.replyError(interaction, 'This giveaway has ended.');
   const alreadyEntered = giveaway.entries?.includes(interaction.user.id);
   await getCollection('giveaways').updateOne({ _id: giveaway._id }, alreadyEntered ? { $pull: { entries: interaction.user.id } } : { $addToSet: { entries: interaction.user.id } });
-  await interaction.reply({ content: alreadyEntered ? 'You left the giveaway.' : '🎉 You entered the giveaway!', ephemeral: true });
+  await interaction.reply({ content: alreadyEntered ? 'You left the giveaway.' : '🎉 You entered the giveaway!', flags: MessageFlags.Ephemeral });
   return true;
 }
 
