@@ -37,6 +37,8 @@ All configuration is done through Discord slash commands and stored separately p
 5. Use `/application panel` wherever applicants should see the Apply button.
 6. Use `/config view` at any time to inspect the effective setup.
 
+Until `/config setup` reports that setup is complete, normal commands remain locked. Required settings cover applications, staff movements, logging, announcements, manager/reviewer access, and the enabled ticket, starboard, or welcome modules. `/config`, `/help`, and centrally authorized `/maintenance` remain available in setup mode.
+
 Questions 2–5 can be disabled by setting their value to `off`. Question 1 is always required. Application decisions are atomic, so two reviewers cannot process the same application twice.
 
 ## Commands

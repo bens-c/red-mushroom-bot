@@ -18,6 +18,11 @@ export const commands = [
       },
       {
         type: ApplicationCommandOptionType.Subcommand,
+        name: 'setup',
+        description: 'Check whether all required channels and roles are configured'
+      },
+      {
+        type: ApplicationCommandOptionType.Subcommand,
         name: 'set-channel',
         description: 'Set a channel used by the bot',
         options: [

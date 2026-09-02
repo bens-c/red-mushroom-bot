@@ -57,6 +57,19 @@ if (!token || !clientId) {
 const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel', 'ticket_category', 'transcript_channel', 'welcome_channel', 'starboard_channel'];
 const roleKeys = ['manager_role', 'reviewer_role', 'accepted_role', 'support_role', 'autorole_role'];
 const allKeys = [...settingKeys, ...channelKeys, ...roleKeys];
+const setupLabels = {
+  application_channel: 'Application reviews channel',
+  movement_channel: 'Staff movements channel',
+  log_channel: 'Audit log channel',
+  announcement_channel: 'General announcements channel',
+  ticket_category: 'Ticket category',
+  transcript_channel: 'Ticket transcripts channel',
+  starboard_channel: 'Starboard channel',
+  welcome_channel: 'Welcome channel',
+  manager_role: 'Bot managers role',
+  reviewer_role: 'Application reviewers role',
+  support_role: 'Ticket support role'
+};
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -126,6 +139,28 @@ async function replyError(interaction, message) {
   const content = `❌ ${message}`;
   if (interaction.deferred || interaction.replied) return interaction.editReply({ content });
   return interaction.reply({ content, flags: MessageFlags.Ephemeral });
+}
+
+function getSetupState(guild) {
+  const required = [
+    'application_channel',
+    'movement_channel',
+    'log_channel',
+    'announcement_channel',
+    'manager_role',
+    'reviewer_role'
+  ];
+  if (getSetting(guild.id, 'tickets_enabled') === 'true') required.push('ticket_category', 'transcript_channel', 'support_role');
+  if (getSetting(guild.id, 'starboard_enabled') === 'true') required.push('starboard_channel');
+  if (getSetting(guild.id, 'welcome_enabled') === 'true') required.push('welcome_channel');
+  const missing = required.filter(key => {
+    const id = getSetting(guild.id, key);
+    if (!id) return true;
+    if (channelKeys.includes(key)) return !guild.channels.cache.has(id);
+    if (roleKeys.includes(key)) return !guild.roles.cache.has(id);
+    return false;
+  });
+  return { ready: missing.length === 0, missing };
 }
 
 async function hasGlobalConfigAccess(userId) {
@@ -209,17 +244,35 @@ async function handleCommand(interaction) {
     if (!globalAccess.allowed) return replyError(interaction, `🛠️ ${getSetting(interaction.guildId, 'maintenance_reason')}`);
   }
   if (interaction.commandName === 'config') return handleConfig(interaction);
+  if (interaction.commandName === 'help') return handleHelp(interaction);
+  const setup = getSetupState(interaction.guild);
+  if (!setup.ready) {
+    return replyError(interaction, `Setup is incomplete. A server administrator must run \`/config setup\`. Missing: ${setup.missing.map(key => setupLabels[key]).join(', ')}.`);
+  }
   if (interaction.commandName === 'application') return handleApplicationCommand(interaction);
   if (interaction.commandName === 'staff') return handleStaff(interaction);
   if (await handleStaffRolesCommand(interaction, { brandEmbed, replyError, isManager })) return;
   if (interaction.commandName === 'announce') return handleAnnouncement(interaction);
-  if (interaction.commandName === 'help') return handleHelp(interaction);
   if (await handleExtraCommand(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
 }
 
 async function handleConfig(interaction) {
   if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return replyError(interaction, 'You need Manage Server to use `/config`.');
   const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === 'setup') {
+    const setup = getSetupState(interaction.guild);
+    const description = setup.ready
+      ? '✅ **Setup complete.** All required channels and roles are configured, and normal bot commands are available.'
+      : `⛔ **Setup incomplete.** Configure the following items before normal commands can be used:\n\n${setup.missing.map(key => `• ${setupLabels[key]} — \`${key}\``).join('\n')}\n\nUse \`/config set-channel\` and \`/config set-role\`, then run this check again.`;
+    return interaction.reply({
+      embeds: [brandEmbed(interaction.guildId)
+        .setTitle('Bot setup status')
+        .setColor(setup.ready ? 0x57f287 : 0xed4245)
+        .setDescription(description)],
+      flags: MessageFlags.Ephemeral
+    });
+  }
 
   if (subcommand === 'view') {
     const settings = getAllSettings(interaction.guildId);
@@ -529,7 +582,7 @@ async function handleHelp(interaction) {
     .setTitle('Command guide')
     .setDescription('One bot for your application and staff-management workflow.')
     .addFields(
-      { name: 'Setup', value: '`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set access and accepted roles\n`/config set-text` — edit branding and templates\n`/maintenance` — restrict commands during maintenance' },
+      { name: 'Setup', value: '`/config setup` — check required setup\n`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set roles\n`/maintenance` — global maintenance control' },
       { name: 'Applications', value: '`/application panel` — post the Apply button\n`/application stats` — review totals\nReviewers accept/reject with buttons in the configured review channel.' },
       { name: 'Staff & communication', value: '`/staff` — record a movement\n`/staff-roles` — automatic promotion/demotion posts\n`/announce` — post a branded announcement' },
       { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, locks, and slowmode\n`/clear` — quickly delete recent messages\n`/level` — XP ranks and leaderboard\n`/giveaway` — manage giveaways' },
