@@ -47,6 +47,8 @@ import {
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
+const controlGuildId = process.env.CONTROL_GUILD_ID || '1399834742802747452';
+const globalConfigRoleId = process.env.GLOBAL_CONFIG_ROLE_ID || '1544634974404214824';
 if (!token || !clientId) {
   console.error('Missing DISCORD_TOKEN or CLIENT_ID. Copy .env.example to .env and fill it in.');
   process.exit(1);
@@ -124,6 +126,15 @@ async function replyError(interaction, message) {
   const content = `❌ ${message}`;
   if (interaction.deferred || interaction.replied) return interaction.editReply({ content });
   return interaction.reply({ content, flags: MessageFlags.Ephemeral });
+}
+
+async function hasGlobalConfigAccess(userId) {
+  const guild = await client.guilds.fetch(controlGuildId).catch(() => null);
+  if (!guild) return { allowed: false, reason: 'The bot cannot access the configured control server.' };
+  const member = await guild.members.fetch(userId).catch(() => null);
+  if (!member) return { allowed: false, reason: 'You must be a member of the control server to use `/config`.' };
+  if (!member.roles.cache.has(globalConfigRoleId)) return { allowed: false, reason: 'You need the global configuration role in the control server.' };
+  return { allowed: true, reason: null };
 }
 
 async function registerCommands() {
@@ -206,6 +217,8 @@ async function handleCommand(interaction) {
 }
 
 async function handleConfig(interaction) {
+  const globalAccess = await hasGlobalConfigAccess(interaction.user.id);
+  if (!globalAccess.allowed) return replyError(interaction, globalAccess.reason);
   if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
   const subcommand = interaction.options.getSubcommand();
 
