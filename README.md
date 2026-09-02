@@ -28,7 +28,7 @@ npm start
 
 All configuration is done through Discord slash commands and stored separately per server.
 
-`/config` is centrally protected: a user must belong to control server `1399834742802747452`, hold role `1544634974404214824` there, and still have Manage Server or the configured manager role in the server being configured. The control IDs can be overridden with `CONTROL_GUILD_ID` and `GLOBAL_CONFIG_ROLE_ID`.
+`/config` requires the local Discord permission **Manage Server**. Global bot-management commands such as `/maintenance` instead require membership in control server `1399834742802747452` and role `1544634974404214824` there. The control IDs can be overridden with `CONTROL_GUILD_ID` and `GLOBAL_CONFIG_ROLE_ID`.
 
 1. Use `/config set-channel` to set application reviews, staff movements, audit logs, and announcements.
 2. Use `/config set-role` to choose managers, application reviewers, and the role granted to accepted applicants.

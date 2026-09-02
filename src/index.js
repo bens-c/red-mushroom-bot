@@ -205,7 +205,8 @@ client.on(Events.InteractionCreate, async interaction => {
 async function handleCommand(interaction) {
   if (interaction.commandName === 'maintenance') return handleMaintenance(interaction);
   if (getSetting(interaction.guildId, 'maintenance_enabled') === 'true' && !isManager(interaction)) {
-    return replyError(interaction, `🛠️ ${getSetting(interaction.guildId, 'maintenance_reason')}`);
+    const globalAccess = await hasGlobalConfigAccess(interaction.user.id);
+    if (!globalAccess.allowed) return replyError(interaction, `🛠️ ${getSetting(interaction.guildId, 'maintenance_reason')}`);
   }
   if (interaction.commandName === 'config') return handleConfig(interaction);
   if (interaction.commandName === 'application') return handleApplicationCommand(interaction);
@@ -217,9 +218,7 @@ async function handleCommand(interaction) {
 }
 
 async function handleConfig(interaction) {
-  const globalAccess = await hasGlobalConfigAccess(interaction.user.id);
-  if (!globalAccess.allowed) return replyError(interaction, globalAccess.reason);
-  if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
+  if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return replyError(interaction, 'You need Manage Server to use `/config`.');
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === 'view') {
@@ -349,7 +348,8 @@ async function handleButton(interaction) {
 }
 
 async function handleMaintenance(interaction) {
-  if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
+  const globalAccess = await hasGlobalConfigAccess(interaction.user.id);
+  if (!globalAccess.allowed) return replyError(interaction, globalAccess.reason);
   const subcommand = interaction.options.getSubcommand();
   if (subcommand === 'status') {
     const enabled = getSetting(interaction.guildId, 'maintenance_enabled') === 'true';
