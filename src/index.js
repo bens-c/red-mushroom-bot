@@ -347,6 +347,11 @@ async function handleButton(interaction) {
   return interaction.showModal(modal);
 }
 
+const maintenanceAnnouncements = {
+  enable: '@everyone ⚠️ **Bckertost Bot Maintenance Notice**\nThe **@Bckertost Bot** is currently undergoing maintenance due to repair work. 🛠️\nDuring this time, you may experience **errors, downtime, or limited functionality**.\nPlease be patient while we work on fixing everything. If you notice any issues, feel free to report them to the team.\nThank you for your patience and understanding! ❤️',
+  disable: '@everyone ⚠️ **Red Mushroom Bot Update**\nThe **@Red Mushroom Bot** is back online! 🎉\nThe planned **maintenance and repair work has been completed**. 🛠️✅\nAll features should now be working as usual. If you still notice any errors or issues, please report them to the team. 🐛\nThank you for your patience and understanding! ❤️'
+};
+
 async function handleMaintenance(interaction) {
   const globalAccess = await hasGlobalConfigAccess(interaction.user.id);
   if (!globalAccess.allowed) return replyError(interaction, globalAccess.reason);
@@ -362,9 +367,15 @@ async function handleMaintenance(interaction) {
       flags: MessageFlags.Ephemeral
     });
   }
+  const announcementChannel = await getTextChannel(interaction.guild, 'announcement_channel');
+  if (!announcementChannel) return replyError(interaction, 'Configure **General announcements** with `/config set-channel` first.');
   if (subcommand === 'enable') {
     const reason = interaction.options.getString('reason')?.trim()
       || 'The bot is currently undergoing maintenance. Please try again later.';
+    await announcementChannel.send({
+      content: maintenanceAnnouncements.enable,
+      allowedMentions: { parse: ['everyone'] }
+    });
     await Promise.all([
       setSetting(interaction.guildId, 'maintenance_enabled', 'true'),
       setSetting(interaction.guildId, 'maintenance_reason', reason)
@@ -373,6 +384,10 @@ async function handleMaintenance(interaction) {
     await interaction.reply({ content: `✅ Maintenance mode enabled.\n**Message:** ${reason}`, flags: MessageFlags.Ephemeral });
     return logEvent(interaction.guild, 'Maintenance enabled', `${interaction.user} enabled maintenance mode.\n**Reason:** ${reason}`);
   }
+  await announcementChannel.send({
+    content: maintenanceAnnouncements.disable,
+    allowedMentions: { parse: ['everyone'] }
+  });
   await setSetting(interaction.guildId, 'maintenance_enabled', 'false');
   updateBotActivity();
   await interaction.reply({ content: '✅ Maintenance mode disabled. Commands are available again.', flags: MessageFlags.Ephemeral });

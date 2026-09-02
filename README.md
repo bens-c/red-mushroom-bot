@@ -46,7 +46,7 @@ Questions 2–5 can be disabled by setting their value to `off`. Question 1 is a
 - `/staff` with hire, promote, demote, transfer, leave, return, resign, and terminate actions
 - `/staff-roles add|remove|list` to trigger movements automatically when watched roles change
 - `/announce`
-- `/maintenance enable|disable|status` to restrict commands to managers during maintenance
+- `/maintenance enable|disable|status` to restrict commands and post `@everyone` updates in the configured announcement channel
 - `/help`
 - `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
 - `/clear amount [user]` to quickly delete recent messages
