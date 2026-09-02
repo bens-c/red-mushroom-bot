@@ -21,6 +21,8 @@ const defaultSettings = {
   automod_enabled: 'true',
   starboard_enabled: 'true',
   event_logs_enabled: 'true',
+  maintenance_enabled: 'false',
+  maintenance_reason: 'The bot is currently undergoing maintenance. Please try again later.',
   welcome_enabled: 'false',
   welcome_message: 'Welcome {user} to **{server}**! You are member #{member_count}.',
   leave_message: '**{username}** left **{server}**.',

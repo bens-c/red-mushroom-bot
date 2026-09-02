@@ -144,10 +144,15 @@ async function registerCommands() {
   }
 }
 
+function updateBotActivity() {
+  const maintenanceActive = client.guilds.cache.some(guild => getSetting(guild.id, 'maintenance_enabled') === 'true');
+  client.user?.setActivity(maintenanceActive ? '🛠️ Maintenance' : '/help • Staff management');
+}
+
 client.once(Events.ClientReady, async readyClient => {
   console.log(`Online as ${readyClient.user.tag} in ${readyClient.guilds.cache.size} server(s).`);
   await registerCommands().catch(error => console.error('Command registration failed:', error));
-  readyClient.user.setActivity('/help • Staff management');
+  updateBotActivity();
   startBackgroundJobs(readyClient);
 });
 
@@ -187,6 +192,10 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 async function handleCommand(interaction) {
+  if (interaction.commandName === 'maintenance') return handleMaintenance(interaction);
+  if (getSetting(interaction.guildId, 'maintenance_enabled') === 'true' && !isManager(interaction)) {
+    return replyError(interaction, `🛠️ ${getSetting(interaction.guildId, 'maintenance_reason')}`);
+  }
   if (interaction.commandName === 'config') return handleConfig(interaction);
   if (interaction.commandName === 'application') return handleApplicationCommand(interaction);
   if (interaction.commandName === 'staff') return handleStaff(interaction);
@@ -326,6 +335,37 @@ async function handleButton(interaction) {
   return interaction.showModal(modal);
 }
 
+async function handleMaintenance(interaction) {
+  if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand === 'status') {
+    const enabled = getSetting(interaction.guildId, 'maintenance_enabled') === 'true';
+    const reason = getSetting(interaction.guildId, 'maintenance_reason');
+    return interaction.reply({
+      embeds: [brandEmbed(interaction.guildId)
+        .setTitle(`🛠️ Maintenance mode • ${enabled ? 'Enabled' : 'Disabled'}`)
+        .setColor(enabled ? 0xfee75c : 0x57f287)
+        .setDescription(enabled ? reason : 'The bot is operating normally.')],
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  if (subcommand === 'enable') {
+    const reason = interaction.options.getString('reason')?.trim()
+      || 'The bot is currently undergoing maintenance. Please try again later.';
+    await Promise.all([
+      setSetting(interaction.guildId, 'maintenance_enabled', 'true'),
+      setSetting(interaction.guildId, 'maintenance_reason', reason)
+    ]);
+    updateBotActivity();
+    await interaction.reply({ content: `✅ Maintenance mode enabled.\n**Message:** ${reason}`, flags: MessageFlags.Ephemeral });
+    return logEvent(interaction.guild, 'Maintenance enabled', `${interaction.user} enabled maintenance mode.\n**Reason:** ${reason}`);
+  }
+  await setSetting(interaction.guildId, 'maintenance_enabled', 'false');
+  updateBotActivity();
+  await interaction.reply({ content: '✅ Maintenance mode disabled. Commands are available again.', flags: MessageFlags.Ephemeral });
+  return logEvent(interaction.guild, 'Maintenance disabled', `${interaction.user} disabled maintenance mode.`);
+}
+
 async function handleSelectMenu(interaction) {
   if (await handleExtraSelect(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
 }
@@ -461,7 +501,7 @@ async function handleHelp(interaction) {
     .setTitle('Command guide')
     .setDescription('One bot for your application and staff-management workflow.')
     .addFields(
-      { name: 'Setup', value: '`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set access and accepted roles\n`/config set-text` — edit branding, questions, and templates\n`/config set-option` — toggle options' },
+      { name: 'Setup', value: '`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set access and accepted roles\n`/config set-text` — edit branding and templates\n`/maintenance` — restrict commands during maintenance' },
       { name: 'Applications', value: '`/application panel` — post the Apply button\n`/application stats` — review totals\nReviewers accept/reject with buttons in the configured review channel.' },
       { name: 'Staff & communication', value: '`/staff` — record a movement\n`/staff-roles` — automatic promotion/demotion posts\n`/announce` — post a branded announcement' },
       { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, locks, and slowmode\n`/clear` — quickly delete recent messages\n`/level` — XP ranks and leaderboard\n`/giveaway` — manage giveaways' },

@@ -172,6 +172,21 @@ export const commands = [
       { type: ApplicationCommandOptionType.String, name: 'mention', description: 'Optional safe mention', choices: [{ name: '@everyone', value: 'everyone' }, { name: '@here', value: 'here' }] }
     ]
   },
+  {
+    name: 'maintenance',
+    description: 'Enable or disable bot maintenance mode',
+    dm_permission: false,
+    options: [
+      {
+        type: ApplicationCommandOptionType.Subcommand,
+        name: 'enable',
+        description: 'Block commands for non-managers',
+        options: [{ type: ApplicationCommandOptionType.String, name: 'reason', description: 'Message shown while maintenance is active', max_length: 500 }]
+      },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'disable', description: 'Return the bot to normal operation' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'status', description: 'Show the current maintenance status' }
+    ]
+  },
   { name: 'help', description: 'Show the bot command guide', dm_permission: false },
   staffRolesCommand,
   ...extraCommands
