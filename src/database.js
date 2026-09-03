@@ -38,8 +38,20 @@ let settingsCollection;
 let applicationsCollection;
 let databaseHandle;
 const settingsCache = new Map();
+let settingsRefreshTimer;
 
 export const settingKeys = Object.keys(defaultSettings);
+
+async function refreshSettingsCache() {
+  if (!settingsCollection) return;
+  const savedSettings = await settingsCollection.find({}).toArray();
+  const next = new Map(savedSettings.map(document => {
+    const { _id, ...settings } = document;
+    return [String(_id), settings];
+  }));
+  settingsCache.clear();
+  for (const [guildId, settings] of next) settingsCache.set(guildId, settings);
+}
 
 export async function initializeDatabase() {
   const uri = process.env.MONGODB_URI;
@@ -50,11 +62,9 @@ export async function initializeDatabase() {
   settingsCollection = databaseHandle.collection('settings');
   applicationsCollection = databaseHandle.collection('applications');
 
-  const savedSettings = await settingsCollection.find({}).toArray();
-  for (const document of savedSettings) {
-    const { _id, ...settings } = document;
-    settingsCache.set(String(_id), settings);
-  }
+  await refreshSettingsCache();
+  settingsRefreshTimer = setInterval(() => refreshSettingsCache().catch(error => console.error('Settings refresh failed:', error.message)), 5_000);
+  settingsRefreshTimer.unref();
 
   await Promise.all([
     applicationsCollection.createIndex({ guild_id: 1, status: 1 }, { name: 'guild_status' }),
@@ -75,13 +85,15 @@ export async function initializeDatabase() {
     databaseHandle.collection('starboard_entries').createIndex({ guild_id: 1, source_message_id: 1 }, { unique: true }),
     databaseHandle.collection('automod_violations').createIndex({ guild_id: 1, user_id: 1, created_at: -1 }),
     databaseHandle.collection('staff_roles').createIndex({ guild_id: 1, role_id: 1 }, { unique: true }),
-    databaseHandle.collection('staff_movements').createIndex({ guild_id: 1, user_id: 1, created_at: -1 })
+    databaseHandle.collection('staff_movements').createIndex({ guild_id: 1, user_id: 1, created_at: -1 }),
+    databaseHandle.collection('web_sessions').createIndex({ token_hash: 1 }, { unique: true }),
+    databaseHandle.collection('web_sessions').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 })
   ]);
 }
 
 export function getCollection(name) {
   if (!databaseHandle) throw new Error('Database has not been initialized.');
-  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations', 'staff_roles', 'staff_movements', 'application_categories'];
+  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations', 'staff_roles', 'staff_movements', 'application_categories', 'web_sessions'];
   if (!allowed.includes(name)) throw new Error(`Collection ${name} is not available.`);
   return databaseHandle.collection(name);
 }
@@ -185,6 +197,8 @@ export async function getApplicationStats(guildId) {
 }
 
 export async function closeDatabase() {
+  if (settingsRefreshTimer) clearInterval(settingsRefreshTimer);
+  settingsRefreshTimer = null;
   if (client) await client.close();
   client = null;
   settingsCollection = null;
