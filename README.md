@@ -28,7 +28,7 @@ npm start
 
 The dashboard is a separate service, so the Discord bot and website can run on different servers. It uses the same MongoDB database. A user only sees servers where the bot is installed and their current Discord account has the **Administrator** permission. That permission is checked again through Discord before every saved change.
 
-1. In Render, choose **New → Blueprint**, connect this GitHub repository, and let Render read `render.yaml`.
+1. In Render, choose **New → Blueprint**, connect this GitHub repository, select the **`web` branch**, and let Render read `render.yaml`.
 2. Enter the requested secret values: `CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_TOKEN`, and `MONGODB_URI`.
 3. Render generates `SESSION_SECRET` automatically and derives the website URL from its hostname. If you later use a custom domain, set `WEB_BASE_URL` manually to that domain without a trailing slash.
 4. Copy the public Render URL. In Discord Developer Portal → OAuth2 → Redirects, add that exact URL followed by `/auth/callback`, for example `https://red-mushroom-web.onrender.com/auth/callback`.

@@ -2,6 +2,7 @@ services:
   - type: web
     name: red-mushroom-web
     runtime: node
+    branch: web
     region: frankfurt
     plan: free
     buildCommand: npm ci
