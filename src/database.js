@@ -38,8 +38,20 @@ let settingsCollection;
 let applicationsCollection;
 let databaseHandle;
 const settingsCache = new Map();
+let settingsRefreshTimer;
 
 export const settingKeys = Object.keys(defaultSettings);
+
+async function refreshSettingsCache() {
+  if (!settingsCollection) return;
+  const savedSettings = await settingsCollection.find({}).toArray();
+  const next = new Map(savedSettings.map(document => {
+    const { _id, ...settings } = document;
+    return [String(_id), settings];
+  }));
+  settingsCache.clear();
+  for (const [guildId, settings] of next) settingsCache.set(guildId, settings);
+}
 
 export async function initializeDatabase() {
   const uri = process.env.MONGODB_URI;
@@ -50,11 +62,9 @@ export async function initializeDatabase() {
   settingsCollection = databaseHandle.collection('settings');
   applicationsCollection = databaseHandle.collection('applications');
 
-  const savedSettings = await settingsCollection.find({}).toArray();
-  for (const document of savedSettings) {
-    const { _id, ...settings } = document;
-    settingsCache.set(String(_id), settings);
-  }
+  await refreshSettingsCache();
+  settingsRefreshTimer = setInterval(() => refreshSettingsCache().catch(error => console.error('Settings refresh failed:', error.message)), 5_000);
+  settingsRefreshTimer.unref();
 
   await Promise.all([
     applicationsCollection.createIndex({ guild_id: 1, status: 1 }, { name: 'guild_status' }),
@@ -185,6 +195,8 @@ export async function getApplicationStats(guildId) {
 }
 
 export async function closeDatabase() {
+  if (settingsRefreshTimer) clearInterval(settingsRefreshTimer);
+  settingsRefreshTimer = null;
   if (client) await client.close();
   client = null;
   settingsCollection = null;
