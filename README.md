@@ -24,20 +24,6 @@ npm install
 npm start
 ```
 
-## Separate web portal on Render
-
-The dashboard is a separate service, so the Discord bot and website can run on different servers. It uses the same MongoDB database. A user only sees servers where the bot is installed and their current Discord account has the **Administrator** permission. That permission is checked again through Discord before every saved change.
-
-1. In Render, choose **New → Blueprint**, connect this GitHub repository, and let Render read `render.yaml`.
-2. Enter the requested secret values: `CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_TOKEN`, and `MONGODB_URI`.
-3. Render generates `SESSION_SECRET` automatically and derives the website URL from its hostname. If you later use a custom domain, set `WEB_BASE_URL` manually to that domain without a trailing slash.
-4. Copy the public Render URL. In Discord Developer Portal → OAuth2 → Redirects, add that exact URL followed by `/auth/callback`, for example `https://red-mushroom-web.onrender.com/auth/callback`.
-5. Make sure MongoDB Atlas allows connections from the Render service, then deploy again after changing any environment variable.
-
-Render supplies its `PORT` automatically. The included `/health` endpoint is configured as the service health check, and pushes to the connected branch deploy automatically.
-
-The bot remains a separate process (`npm start` or its existing PM2 service). Never put the Discord client secret, bot token, MongoDB URI, or session secret in browser code or commit them to Git.
-
 ## First-time server setup
 
 All configuration is done through Discord slash commands and stored separately per server.

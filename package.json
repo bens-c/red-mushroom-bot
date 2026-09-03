@@ -7,9 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "web": "node src/web.js",
-    "dev:web": "node --watch src/web.js",
-    "check": "node --check src/index.js && node --check src/commands.js && node --check src/database.js && node --check src/extra-commands.js && node --check src/extra-features.js && node --check src/community-features.js && node --check src/staff-movements.js && node --check src/web-portal.js && node --check src/web.js && node --check public/portal.js",
+    "check": "node --check src/index.js && node --check src/commands.js && node --check src/database.js && node --check src/extra-commands.js && node --check src/extra-features.js && node --check src/community-features.js && node --check src/staff-movements.js",
     "test": "node --test",
     "verify:mongodb": "node scripts/verify-mongodb.js"
   },
@@ -19,8 +17,6 @@
   "dependencies": {
     "discord.js": "^14.27.0",
     "dotenv": "^17.2.2",
-    "express": "^5.2.1",
-    "helmet": "^8.3.0",
     "mongodb": "^7.6.0"
   }
 }
