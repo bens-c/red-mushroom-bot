@@ -174,7 +174,7 @@ function layout({ title, content, session = null, guilds = [], currentGuild = nu
     <div class="shell">
       ${session ? `<aside><a class="logo" href="/dashboard"><span>🍄</span><b>Red Mushroom</b></a><nav>${guildLinks || '<p class="muted">No admin servers found.</p>'}</nav><form class="logout api-form" action="/auth/logout" method="post"><button type="submit">Sign out</button></form></aside>` : ''}
       <main class="${session ? '' : 'centered'}">${session ? `<header><div><p class="eyebrow">CONTROL PANEL</p><h1>${escapeHtml(currentGuild?.name || 'Your servers')}</h1></div><div class="user"><img src="${escapeHtml(session.avatarUrl)}" alt=""><span>${escapeHtml(session.username)}</span></div></header>` : ''}${content}</main>
-    </div><div id="toast" role="status" aria-live="polite"></div><script src="/portal.js" defer></script></body></html>`;
+    </div><div id="save-bar" role="status" aria-live="polite"><div><strong>Unsaved changes</strong><span>Your new configuration is ready to save.</span></div><button id="save-all" class="primary" type="button">Save changes</button></div><div id="toast" role="status" aria-live="polite"></div><script src="/portal.js" defer></script></body></html>`;
 }
 
 function loginPage(clientId) {
@@ -186,7 +186,7 @@ function selectOptions(items, selected, emptyLabel) {
 }
 
 function settingForm(kind, key, label, control) {
-  return `<form class="setting-row api-form" action="settings" method="post"><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(key)}</small></div><input type="hidden" name="kind" value="${kind}"><input type="hidden" name="key" value="${key}">${control}<button type="submit">Save</button></form>`;
+  return `<form class="setting-row setting-form" action="settings" method="post"><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(key)}</small></div><input type="hidden" name="kind" value="${kind}"><input type="hidden" name="key" value="${key}">${control}</form>`;
 }
 
 function guildDashboard(guild, settings, positions) {
@@ -206,6 +206,25 @@ function guildDashboard(guild, settings, positions) {
     <section class="panel" data-panel="modules"><div class="section-head"><h2>Modules</h2><p>Enable only the systems your community uses.</p></div>${optionForms}</section>
     <section class="panel" data-panel="applications"><div class="section-head"><h2>Application positions</h2><p>Control what applications are open and where reviews arrive.</p></div><form class="position-create api-form" action="application-positions" method="post"><input name="name" placeholder="Position name" maxlength="80" required><input name="description" placeholder="Short dropdown description" maxlength="100"><select name="review_channel_id" required>${selectOptions(channels, '', 'Review channel')}</select><select name="accepted_role_id">${selectOptions(roles, '', 'No accepted role')}</select><button class="primary" type="submit">Add position</button></form><div class="positions">${positionRows || '<p class="empty">No application positions configured yet.</p>'}</div></section>
     <section class="panel" data-panel="text"><div class="section-head"><h2>Text & brand</h2><p>Customize the messages members see.</p></div>${textForms}</section>`;
+}
+
+function validatedSetting(guild, input) {
+  const { kind, key } = input;
+  const value = String(input.value ?? '').trim();
+  if (kind === 'channel' && key in channelSettings) {
+    const channel = guild.channels.find(item => item.id === value);
+    const valid = key === 'ticket_category' ? channel?.type === ChannelType.GuildCategory : [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(channel?.type);
+    if (!valid) throw new Error('Choose a valid channel.');
+  } else if (kind === 'role' && key in roleSettings) {
+    const role = guild.roles.find(item => item.id === value);
+    if (!role || role.id === guild.id || role.managed) throw new Error('Choose a normal server role.');
+  } else if (kind === 'option' && key in optionSettings) {
+    if (!['true', 'false'].includes(value)) throw new Error('Invalid option value.');
+  } else if (kind === 'text' && key in textSettings) {
+    if (!value || value.length > 1000) throw new Error('Text must contain 1–1000 characters.');
+    if (key === 'brand_color' && !/^#[0-9a-f]{6}$/i.test(value)) throw new Error('Use a color such as #d93636.');
+  } else throw new Error('Unknown setting.');
+  return { key, value, label: channelSettings[key] || roleSettings[key] || optionSettings[key] || textSettings[key] };
 }
 
 export function createWebPortalApp(config = {}) {
@@ -300,24 +319,24 @@ export function createWebPortalApp(config = {}) {
     next();
   });
   app.post('/api/guilds/:guildId/settings', async (request, response) => {
-    const { kind, key } = request.body;
-    let value = String(request.body.value ?? '').trim();
-    const guild = request.portalGuild;
-    if (kind === 'channel' && key in channelSettings) {
-      const channel = guild.channels.find(item => item.id === value);
-      const valid = key === 'ticket_category' ? channel?.type === ChannelType.GuildCategory : [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(channel?.type);
-      if (!valid) return response.status(400).json({ error: 'Choose a valid channel.' });
-    } else if (kind === 'role' && key in roleSettings) {
-      const role = guild.roles.find(item => item.id === value);
-      if (!role || role.id === guild.id || role.managed) return response.status(400).json({ error: 'Choose a normal server role.' });
-    } else if (kind === 'option' && key in optionSettings) {
-      if (!['true', 'false'].includes(value)) return response.status(400).json({ error: 'Invalid option value.' });
-    } else if (kind === 'text' && key in textSettings) {
-      if (!value || value.length > 1000) return response.status(400).json({ error: 'Text must contain 1–1000 characters.' });
-      if (key === 'brand_color' && !/^#[0-9a-f]{6}$/i.test(value)) return response.status(400).json({ error: 'Use a color such as #d93636.' });
-    } else return response.status(400).json({ error: 'Unknown setting.' });
-    await setSetting(guild.id, key, value);
-    response.json({ ok: true, message: `${channelSettings[key] || roleSettings[key] || optionSettings[key] || textSettings[key]} saved.` });
+    try {
+      const setting = validatedSetting(request.portalGuild, request.body);
+      await setSetting(request.portalGuild.id, setting.key, setting.value);
+      response.json({ ok: true, message: `${setting.label} saved.` });
+    } catch (error) {
+      response.status(400).json({ error: error.message });
+    }
+  });
+  app.post('/api/guilds/:guildId/settings/bulk', async (request, response) => {
+    try {
+      if (!Array.isArray(request.body.settings) || !request.body.settings.length || request.body.settings.length > 50) throw new Error('Submit between 1 and 50 settings.');
+      const settings = request.body.settings.map(input => validatedSetting(request.portalGuild, input));
+      if (new Set(settings.map(setting => setting.key)).size !== settings.length) throw new Error('A setting can only be submitted once.');
+      await Promise.all(settings.map(setting => setSetting(request.portalGuild.id, setting.key, setting.value)));
+      response.json({ ok: true, message: `${settings.length} ${settings.length === 1 ? 'setting' : 'settings'} saved.` });
+    } catch (error) {
+      response.status(400).json({ error: error.message });
+    }
   });
   app.post('/api/guilds/:guildId/application-positions', async (request, response) => {
     const collection = getCollection('application_categories');
