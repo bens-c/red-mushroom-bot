@@ -62,6 +62,7 @@ export async function initializeDatabase() {
       { guild_id: 1, user_id: 1, status: 1, created_at: -1 },
       { name: 'guild_user_status_created' }
     ),
+    databaseHandle.collection('application_categories').createIndex({ guild_id: 1, key: 1 }, { unique: true }),
     databaseHandle.collection('moderation_cases').createIndex({ guild_id: 1, user_id: 1, created_at: -1 }),
     databaseHandle.collection('levels').createIndex({ guild_id: 1, xp: -1 }),
     databaseHandle.collection('levels').createIndex({ guild_id: 1, user_id: 1 }, { unique: true }),
@@ -80,7 +81,7 @@ export async function initializeDatabase() {
 
 export function getCollection(name) {
   if (!databaseHandle) throw new Error('Database has not been initialized.');
-  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations', 'staff_roles', 'staff_movements'];
+  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'starboard_entries', 'automod_violations', 'staff_roles', 'staff_movements', 'application_categories'];
   if (!allowed.includes(name)) throw new Error(`Collection ${name} is not available.`);
   return databaseHandle.collection(name);
 }
@@ -124,12 +125,13 @@ export function getAllSettings(guildId) {
   return { ...defaultSettings, ...(settingsCache.get(guildId) || {}) };
 }
 
-export async function createApplication(guildId, userId, answers) {
+export async function createApplication(guildId, userId, answers, metadata = {}) {
   ensureInitialized();
   const result = await applicationsCollection.insertOne({
     guild_id: guildId,
     user_id: userId,
     answers,
+    ...metadata,
     status: 'pending',
     reviewer_id: null,
     review_reason: null,

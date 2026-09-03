@@ -14,6 +14,7 @@ import {
   PermissionFlagsBits,
   REST,
   Routes,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle
 } from 'discord.js';
@@ -35,6 +36,7 @@ import {
   getAllSettings,
   getApplication,
   getApplicationStats,
+  getCollection,
   getPendingApplication,
   getSetting,
   initializeDatabase,
@@ -336,19 +338,74 @@ async function handleConfig(interaction) {
   }
 }
 
+function applicationPositionKey(name) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+}
+
 async function handleApplicationCommand(interaction) {
   const subcommand = interaction.options.getSubcommand();
+  const positions = getCollection('application_categories');
   if (subcommand === 'panel') {
     if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
+    const openPositions = await positions.find({ guild_id: interaction.guildId, open: true }).sort({ name: 1 }).limit(25).toArray();
+    if (!openPositions.length) return replyError(interaction, 'No application positions are open. Add one with `/application position-add`.');
     const embed = brandEmbed(interaction.guildId)
       .setTitle(getSetting(interaction.guildId, 'application_title'))
-      .setDescription(getSetting(interaction.guildId, 'application_description'));
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('application:start').setLabel('Apply now').setEmoji('📝').setStyle(ButtonStyle.Primary)
-    );
-    await interaction.channel.send({ embeds: [embed], components: [row] });
-    return interaction.reply({ content: '✅ Application panel posted.', flags: MessageFlags.Ephemeral });
+      .setDescription(`${getSetting(interaction.guildId, 'application_description')}\n\nSelect the position you want to apply for below.`);
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('application:position')
+      .setPlaceholder('Choose an open position...')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(openPositions.map(position => ({
+        label: position.name,
+        value: position.key,
+        description: position.description || `Apply for ${position.name}`,
+        emoji: '📝'
+      })));
+    await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+    return interaction.reply({ content: `✅ Application panel posted with **${openPositions.length}** open position(s).`, flags: MessageFlags.Ephemeral });
   }
+
+  if (['position-add', 'position-toggle', 'position-remove', 'positions'].includes(subcommand)) {
+    if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
+    if (subcommand === 'position-add') {
+      const name = interaction.options.getString('name', true).trim();
+      const key = applicationPositionKey(name);
+      if (!key) return replyError(interaction, 'The position name must contain letters or numbers.');
+      const reviewChannel = interaction.options.getChannel('review-channel', true);
+      const acceptedRole = interaction.options.getRole('accepted-role');
+      const description = interaction.options.getString('description')?.trim() || `Apply for ${name}`;
+      if (acceptedRole?.id === interaction.guildId) return replyError(interaction, 'The @everyone role cannot be assigned to accepted applicants.');
+      const existingPosition = await positions.findOne({ guild_id: interaction.guildId, key });
+      if (!existingPosition && await positions.countDocuments({ guild_id: interaction.guildId }) >= 25) return replyError(interaction, 'Discord dropdowns support up to 25 positions. Remove one before adding another.');
+      await positions.updateOne(
+        { guild_id: interaction.guildId, key },
+        { $set: { guild_id: interaction.guildId, key, name, description, review_channel_id: reviewChannel.id, accepted_role_id: acceptedRole?.id || null, open: true, updated_by: interaction.user.id, updated_at: new Date() }, $setOnInsert: { created_at: new Date() } },
+        { upsert: true }
+      );
+      return interaction.reply({ content: `✅ Applications for **${name}** are open and will go to ${reviewChannel}.${acceptedRole ? ` Accepted applicants receive ${acceptedRole}.` : ''}\nPosition key: \`${key}\``, flags: MessageFlags.Ephemeral });
+    }
+    if (subcommand === 'positions') {
+      const configured = await positions.find({ guild_id: interaction.guildId }).sort({ name: 1 }).limit(25).toArray();
+      const description = configured.length
+        ? configured.map(position => `${position.open ? '🟢' : '🔴'} **${position.name}** (\`${position.key}\`)\nReview: <#${position.review_channel_id}>${position.accepted_role_id ? ` • Role: <@&${position.accepted_role_id}>` : ''}`).join('\n\n')
+        : 'No application positions are configured.';
+      return interaction.reply({ embeds: [brandEmbed(interaction.guildId).setTitle('Application positions').setDescription(description.slice(0, 4096))], flags: MessageFlags.Ephemeral });
+    }
+    const key = applicationPositionKey(interaction.options.getString('position', true));
+    const position = await positions.findOne({ guild_id: interaction.guildId, key });
+    if (!position) return replyError(interaction, 'Position not found. Copy its key from `/application positions`.');
+    if (subcommand === 'position-remove') {
+      await positions.deleteOne({ _id: position._id });
+      return interaction.reply({ content: `✅ Application position **${position.name}** was removed. Existing applications remain stored.`, flags: MessageFlags.Ephemeral });
+    }
+    const open = interaction.options.getBoolean('open', true);
+    if (open && !position.open && await positions.countDocuments({ guild_id: interaction.guildId, open: true }) >= 25) return replyError(interaction, 'Discord dropdowns support up to 25 open positions. Close another position first.');
+    await positions.updateOne({ _id: position._id }, { $set: { open, updated_by: interaction.user.id, updated_at: new Date() } });
+    return interaction.reply({ content: `✅ Applications for **${position.name}** are now **${open ? 'open' : 'closed'}**. Post a new panel to update its dropdown.`, flags: MessageFlags.Ephemeral });
+  }
+
   if (!isReviewer(interaction)) return replyError(interaction, 'You need the reviewer or manager role.');
   const stats = await getApplicationStats(interaction.guildId);
   return interaction.reply({
@@ -362,28 +419,34 @@ async function handleApplicationCommand(interaction) {
   });
 }
 
+async function showApplicationModal(interaction, position = null) {
+  if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
+  const customId = position ? `application:submit:${position.key}` : 'application:submit';
+  const title = position ? `${position.name} Application` : getSetting(interaction.guildId, 'application_title');
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(title.slice(0, 45));
+  const rows = [];
+  for (let i = 1; i <= 5; i += 1) {
+    const question = getSetting(interaction.guildId, `application_question_${i}`);
+    if (!question) continue;
+    const input = new TextInputBuilder()
+      .setCustomId(`question_${i}`)
+      .setLabel(question.slice(0, 45))
+      .setPlaceholder(question.slice(0, 100))
+      .setStyle(i <= 2 ? TextInputStyle.Paragraph : TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(i <= 2 ? 1000 : 300);
+    rows.push(new ActionRowBuilder().addComponents(input));
+  }
+  modal.addComponents(...rows);
+  return interaction.showModal(modal);
+}
+
 async function handleButton(interaction) {
   if (interaction.customId.startsWith('ticket:') || interaction.customId.startsWith('giveaway:')) {
     return handleExtraButton(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer });
   }
   if (interaction.customId === 'application:start') {
-    if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
-    const modal = new ModalBuilder().setCustomId('application:submit').setTitle(getSetting(interaction.guildId, 'application_title').slice(0, 45));
-    const rows = [];
-    for (let i = 1; i <= 5; i += 1) {
-      const question = getSetting(interaction.guildId, `application_question_${i}`);
-      if (!question) continue;
-      const input = new TextInputBuilder()
-        .setCustomId(`question_${i}`)
-        .setLabel(question.slice(0, 45))
-        .setPlaceholder(question.slice(0, 100))
-        .setStyle(i <= 2 ? TextInputStyle.Paragraph : TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(i <= 2 ? 1000 : 300);
-      rows.push(new ActionRowBuilder().addComponents(input));
-    }
-    modal.addComponents(...rows);
-    return interaction.showModal(modal);
+    return showApplicationModal(interaction);
   }
 
   const match = interaction.customId.match(/^application:(accept|reject):([a-f0-9]{24})$/i);
@@ -449,30 +512,47 @@ async function handleMaintenance(interaction) {
 
 async function handleSelectMenu(interaction) {
   if (await handleExtraSelect(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
+  if (interaction.customId === 'application:position') {
+    const position = await getCollection('application_categories').findOne({ guild_id: interaction.guildId, key: interaction.values[0], open: true });
+    if (!position) return replyError(interaction, 'Applications for that position are no longer open. Ask an administrator to post a new panel.');
+    return showApplicationModal(interaction, position);
+  }
 }
 
 async function handleModal(interaction) {
-  if (interaction.customId === 'application:submit') return submitApplication(interaction);
+  const submission = interaction.customId.match(/^application:submit(?::([a-z0-9_-]{1,32}))?$/i);
+  if (submission) return submitApplication(interaction, submission[1] || null);
   const match = interaction.customId.match(/^application:decision:(accept|reject):([a-f0-9]{24})$/i);
   if (match) return decideApplication(interaction, match[1], match[2]);
 }
 
-async function submitApplication(interaction) {
+async function submitApplication(interaction, positionKey = null) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   if (await getPendingApplication(interaction.guildId, interaction.user.id)) return replyError(interaction, 'You already have a pending application.');
+  const position = positionKey
+    ? await getCollection('application_categories').findOne({ guild_id: interaction.guildId, key: positionKey })
+    : null;
+  if (positionKey && !position) return replyError(interaction, 'That application position no longer exists.');
   const answers = [];
   for (let i = 1; i <= 5; i += 1) {
     const question = getSetting(interaction.guildId, `application_question_${i}`);
     if (!question) continue;
     answers.push({ question, answer: interaction.fields.getTextInputValue(`question_${i}`) });
   }
-  const reviewChannel = await getTextChannel(interaction.guild, 'application_channel');
+  const reviewChannel = position?.review_channel_id
+    ? await interaction.guild.channels.fetch(position.review_channel_id).catch(() => null)
+    : await getTextChannel(interaction.guild, 'application_channel');
   if (!reviewChannel) return replyError(interaction, 'Applications are not configured yet. Please contact a server administrator.');
-  const id = await createApplication(interaction.guildId, interaction.user.id, answers);
+  const id = await createApplication(interaction.guildId, interaction.user.id, answers, {
+    position_key: position?.key || null,
+    position_name: position?.name || null,
+    review_channel_id: reviewChannel.id,
+    accepted_role_id: position?.accepted_role_id || null
+  });
   const embed = brandEmbed(interaction.guildId, { footer: `Application #${id}` })
-    .setTitle(`New application • ${interaction.user.username}`)
+    .setTitle(`New ${position ? `${position.name} ` : ''}application • ${interaction.user.username}`)
     .setThumbnail(interaction.user.displayAvatarURL())
-    .setDescription(`Applicant: ${interaction.user} (\`${interaction.user.id}\`)`)
+    .setDescription(`Applicant: ${interaction.user} (\`${interaction.user.id}\`)${position ? `\nPosition: **${position.name}**` : ''}`)
     .addFields(answers.map(({ question, answer }) => ({ name: question.slice(0, 256), value: answer.slice(0, 1024) })));
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`application:accept:${id}`).setLabel('Accept').setEmoji('✅').setStyle(ButtonStyle.Success),
@@ -481,8 +561,8 @@ async function submitApplication(interaction) {
   const reviewerRole = getSetting(interaction.guildId, 'reviewer_role');
   const message = await reviewChannel.send({ content: reviewerRole ? `<@&${reviewerRole}>` : undefined, embeds: [embed], components: [row], allowedMentions: { roles: reviewerRole ? [reviewerRole] : [] } });
   await setApplicationMessage(id, message.id);
-  await interaction.editReply(`✅ Your application **#${id}** was submitted. You will be notified when it is reviewed.`);
-  return logEvent(interaction.guild, 'Application submitted', `${interaction.user} submitted application **#${id}**.`);
+  await interaction.editReply(`✅ Your${position ? ` **${position.name}**` : ''} application **#${id}** was submitted. You will be notified when it is reviewed.`);
+  return logEvent(interaction.guild, 'Application submitted', `${interaction.user} submitted${position ? ` a **${position.name}**` : ' an'} application **#${id}**.`);
 }
 
 async function decideApplication(interaction, decision, id) {
@@ -493,13 +573,17 @@ async function decideApplication(interaction, decision, id) {
   if (!await reviewApplication(id, interaction.guildId, status, interaction.user.id, reason)) return replyError(interaction, 'This application has already been reviewed.');
   const application = await getApplication(id, interaction.guildId);
   const member = await interaction.guild.members.fetch(application.user_id).catch(() => null);
-  const acceptedRoleId = getSetting(interaction.guildId, 'accepted_role');
+  const acceptedRoleId = application.position_key
+    ? application.accepted_role_id
+    : getSetting(interaction.guildId, 'accepted_role');
   let roleNote = '';
   if (status === 'accepted' && member && acceptedRoleId) {
     const added = await member.roles.add(acceptedRoleId, `Application #${id} accepted by ${interaction.user.tag}`).then(() => true).catch(() => false);
     if (!added) roleNote = ' I could not add the accepted role; check my role hierarchy.';
   }
-  const reviewChannel = await getTextChannel(interaction.guild, 'application_channel');
+  const reviewChannel = application.review_channel_id
+    ? await interaction.guild.channels.fetch(application.review_channel_id).catch(() => null)
+    : await getTextChannel(interaction.guild, 'application_channel');
   const reviewMessage = reviewChannel && application.review_message_id
     ? await reviewChannel.messages.fetch(application.review_message_id).catch(() => null)
     : null;
@@ -583,7 +667,7 @@ async function handleHelp(interaction) {
     .setDescription('One bot for your application and staff-management workflow.')
     .addFields(
       { name: 'Setup', value: '`/config setup` — check required setup\n`/config view` — inspect settings\n`/config set-channel` — set destinations\n`/config set-role` — set roles\n`/maintenance` — global maintenance control' },
-      { name: 'Applications', value: '`/application panel` — post the Apply button\n`/application stats` — review totals\nReviewers accept/reject with buttons in the configured review channel.' },
+      { name: 'Applications', value: '`/application position-add` — configure an open position\n`/application position-toggle` — open or close it\n`/application positions` — view destinations\n`/application panel` — post the position dropdown' },
       { name: 'Staff & communication', value: '`/staff` — record a movement\n`/staff-roles` — automatic promotion/demotion posts\n`/announce` — post a branded announcement' },
       { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, locks, and slowmode\n`/clear` — quickly delete recent messages\n`/level` — XP ranks and leaderboard\n`/giveaway` — manage giveaways' },
       { name: 'Support & safety', value: '`/ticket` — panels, private tickets, claims, members, transcripts, and closing\n`/backup` — create, list, safely restore, and delete server backups\n`/utility` — info, polls, reminders, AFK, and custom responses' },

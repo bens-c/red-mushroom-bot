@@ -139,7 +139,34 @@ export const commands = [
     dm_permission: false,
     options: [
       { type: ApplicationCommandOptionType.Subcommand, name: 'panel', description: 'Post the application panel (Manage Server required)' },
-      { type: ApplicationCommandOptionType.Subcommand, name: 'stats', description: 'View application statistics (staff only)' }
+      { type: ApplicationCommandOptionType.Subcommand, name: 'stats', description: 'View application statistics (staff only)' },
+      {
+        type: ApplicationCommandOptionType.Subcommand,
+        name: 'position-add',
+        description: 'Add or update a position that applications can be opened for',
+        options: [
+          { type: ApplicationCommandOptionType.String, name: 'name', description: 'Position name, for example Moderator', required: true, max_length: 80 },
+          { type: ApplicationCommandOptionType.Channel, name: 'review-channel', description: 'Channel that receives these applications', required: true, channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement] },
+          { type: ApplicationCommandOptionType.Role, name: 'accepted-role', description: 'Optional role assigned when accepted' },
+          { type: ApplicationCommandOptionType.String, name: 'description', description: 'Short description shown in the dropdown', max_length: 100 }
+        ]
+      },
+      {
+        type: ApplicationCommandOptionType.Subcommand,
+        name: 'position-toggle',
+        description: 'Open or close applications for a position',
+        options: [
+          { type: ApplicationCommandOptionType.String, name: 'position', description: 'Position key shown by /application positions', required: true, max_length: 32 },
+          { type: ApplicationCommandOptionType.Boolean, name: 'open', description: 'Whether applications are open', required: true }
+        ]
+      },
+      {
+        type: ApplicationCommandOptionType.Subcommand,
+        name: 'position-remove',
+        description: 'Remove an application position',
+        options: [{ type: ApplicationCommandOptionType.String, name: 'position', description: 'Position key shown by /application positions', required: true, max_length: 32 }]
+      },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'positions', description: 'List configured application positions and destinations' }
     ]
   },
   {

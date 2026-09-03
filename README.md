@@ -34,17 +34,19 @@ All configuration is done through Discord slash commands and stored separately p
 2. Use `/config set-role` to choose managers, application reviewers, and the role granted to accepted applicants.
 3. Use `/config set-text` to customize branding, questions, and message templates.
 4. Use `/config set-option` to enable or disable decision DMs and individual modules.
-5. Use `/application panel` wherever applicants should see the Apply button.
+5. Add open positions with `/application position-add`, then use `/application panel` wherever applicants should see the position dropdown.
 6. Use `/config view` at any time to inspect the effective setup.
 
 Until `/config setup` reports that setup is complete, normal commands remain locked. Required settings cover applications, staff movements, logging, announcements, manager/reviewer access, and the enabled ticket, starboard, or welcome modules. `/config`, `/help`, and centrally authorized `/maintenance` remain available in setup mode.
 
 Questions 2–5 can be disabled by setting their value to `off`. Question 1 is always required. Application decisions are atomic, so two reviewers cannot process the same application twice.
 
+Each application position has its own name, open/closed state, review channel, short dropdown description, and optional accepted role. New panels show only open positions (up to Discord's 25-option dropdown limit). Post a new panel after changing which positions are open.
+
 ## Commands
 
 - `/config view|set-channel|set-role|set-text|set-option|reset`
-- `/application panel|stats`
+- `/application panel|stats|position-add|position-toggle|position-remove|positions`
 - `/staff` with hire, promote, demote, transfer, leave, return, resign, and terminate actions
 - `/staff-roles add|remove|list` to trigger movements automatically when watched roles change
 - `/announce`
