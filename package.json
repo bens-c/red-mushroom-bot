@@ -14,7 +14,7 @@
     "verify:mongodb": "node scripts/verify-mongodb.js"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": "20.19.0"
   },
   "dependencies": {
     "discord.js": "^14.27.0",
