@@ -32,7 +32,9 @@ const textSettings = {
   movement_template: 'Staff movement template', welcome_message: 'Welcome message', leave_message: 'Leave message'
 };
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const GUILD_CACHE_TTL_MS = 15_000;
 let webServer;
+const guildCache = new Map();
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -62,17 +64,26 @@ function decryptToken(value, secret) {
 }
 
 async function discordRequest(path, { token, tokenType = 'Bot', method = 'GET', body } = {}) {
-  const response = await fetch(`https://discord.com/api/v10${path}`, {
-    method,
-    headers: { authorization: `${tokenType} ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  if (!response.ok) {
-    const error = new Error(`Discord API ${response.status}: ${path}`);
-    error.status = response.status;
-    throw error;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(`https://discord.com/api/v10${path}`, {
+      method,
+      headers: { authorization: `${tokenType} ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (response.status === 429 && attempt < 2) {
+      const rateLimit = await response.json().catch(() => ({}));
+      const retryMs = Math.min(Math.max(Number(rateLimit.retry_after || 1) * 1000, 250), 15_000);
+      await new Promise(resolveDelay => setTimeout(resolveDelay, retryMs));
+      continue;
+    }
+    if (!response.ok) {
+      const error = new Error(`Discord API ${response.status}: ${path}`);
+      error.status = response.status;
+      throw error;
+    }
+    return response.status === 204 ? null : response.json();
   }
-  return response.status === 204 ? null : response.json();
+  throw new Error(`Discord API rate limit: ${path}`);
 }
 
 async function oauthAccessToken(session, { clientId, clientSecret, sessionSecret, baseUrl }) {
@@ -121,17 +132,24 @@ async function oauthAdminGuilds(session, config) {
   return oauthGuilds.filter(guild => (BigInt(guild.permissions || '0') & ADMINISTRATOR) === ADMINISTRATOR);
 }
 
-async function adminGuilds(session, config) {
+async function adminGuilds(session, config, { useCache = false } = {}) {
+  const cacheKey = String(session._id);
+  const cached = guildCache.get(cacheKey);
+  if (useCache && cached?.expiresAt > Date.now()) return cached.guilds;
   const admins = await oauthAdminGuilds(session, config);
   const installed = await Promise.all(admins.map(async guild => {
     try { return await discordRequest(`/guilds/${guild.id}?with_counts=true`, { token: config.botToken }); }
     catch (error) { if (error.status === 403 || error.status === 404) return null; throw error; }
   }));
-  return installed.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+  const guilds = installed.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+  if (useCache) guildCache.set(cacheKey, { guilds, expiresAt: Date.now() + GUILD_CACHE_TTL_MS });
+  return guilds;
 }
 
-async function requireGuildAdmin(session, guildId, config) {
-  const admin = (await oauthAdminGuilds(session, config)).find(item => item.id === guildId);
+async function requireGuildAdmin(session, guildId, config, knownAdminGuilds = null) {
+  const admin = knownAdminGuilds
+    ? knownAdminGuilds.find(item => item.id === guildId)
+    : (await oauthAdminGuilds(session, config)).find(item => item.id === guildId);
   if (!admin) return null;
   let guild;
   try { guild = await discordRequest(`/guilds/${guildId}?with_counts=true`, { token: config.botToken }); }
@@ -257,17 +275,19 @@ export function createWebPortalApp(config = {}) {
   });
 
   app.post('/auth/logout', async (request, response) => {
+    guildCache.delete(String(request.portalSession._id));
     await getCollection('web_sessions').deleteOne({ token_hash: tokenHash(request.rawSessionToken) });
     setCookie(response, 'rm_session', '', { clear: true, secure: secureCookies });
     response.json({ redirect: '/' });
   });
   app.get('/dashboard', async (request, response) => {
-    const guilds = await adminGuilds(request.portalSession, portalConfig);
+    const guilds = await adminGuilds(request.portalSession, portalConfig, { useCache: true });
     if (guilds[0]) return response.redirect(`/dashboard/${guilds[0].id}`);
     response.send(layout({ title: 'Dashboard', session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url }, csrf: request.portalSession.csrf, content: '<section class="empty-state"><div>🔐</div><h2>No manageable servers</h2><p>You need Discord Administrator permission on a server where Red Mushroom Bot is installed.</p></section>' }));
   });
   app.get('/dashboard/:guildId', async (request, response) => {
-    const [guild, guilds] = await Promise.all([requireGuildAdmin(request.portalSession, request.params.guildId, portalConfig), adminGuilds(request.portalSession, portalConfig)]);
+    const guilds = await adminGuilds(request.portalSession, portalConfig, { useCache: true });
+    const guild = await requireGuildAdmin(request.portalSession, request.params.guildId, portalConfig, guilds);
     if (!guild) return response.status(403).send(layout({ title: 'Access denied', session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url }, guilds, csrf: request.portalSession.csrf, content: '<section class="empty-state"><div>⛔</div><h2>Access denied</h2><p>Administrator permission is required.</p></section>' }));
     const positions = await getCollection('application_categories').find({ guild_id: guild.id }).sort({ name: 1 }).toArray();
     response.send(layout({ title: guild.name, session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url }, guilds, currentGuild: guild, csrf: request.portalSession.csrf, content: guildDashboard(guild, getAllSettings(guild.id), positions) }));
