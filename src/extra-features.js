@@ -184,6 +184,41 @@ function levelFromXp(xp) {
   return Math.floor(Math.sqrt(Math.max(0, xp) / 100));
 }
 
+export function parseArcaneCsv(input) {
+  const lines = String(input).replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim());
+  if (lines.length < 2) throw new Error('The CSV must contain a header and at least one member.');
+  const delimiter = ['\t', ';', ','].sort((a, b) => lines[0].split(b).length - lines[0].split(a).length)[0];
+  const parseLine = line => {
+    const cells = [];
+    let cell = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (character === '"' && quoted && line[index + 1] === '"') { cell += '"'; index += 1; }
+      else if (character === '"') quoted = !quoted;
+      else if (character === delimiter && !quoted) { cells.push(cell.trim()); cell = ''; }
+      else cell += character;
+    }
+    cells.push(cell.trim());
+    return cells;
+  };
+  const headers = parseLine(lines[0]).map(header => header.toLowerCase().replace(/[\s-]+/g, '_'));
+  const userIndex = ['user_id', 'discord_id', 'member_id', 'id'].map(name => headers.indexOf(name)).find(index => index >= 0);
+  const levelIndex = headers.indexOf('level');
+  if (userIndex === undefined || levelIndex < 0) throw new Error('The CSV needs `user_id` and `level` columns.');
+  const members = new Map();
+  let skipped = 0;
+  for (const line of lines.slice(1)) {
+    const cells = parseLine(line);
+    const userId = String(cells[userIndex] || '').match(/\d{17,20}/)?.[0];
+    const level = Number(cells[levelIndex]);
+    if (!userId || !Number.isInteger(level) || level < 0 || level > 1000) { skipped += 1; continue; }
+    members.set(userId, Math.max(level, members.get(userId) || 0));
+  }
+  if (!members.size) throw new Error('No valid Discord user IDs and levels were found.');
+  return { members: [...members].map(([userId, level]) => ({ userId, level })), skipped };
+}
+
 async function grantLevelRoles(guild, userId, level) {
   const member = await guild.members.fetch(userId).catch(() => null);
   if (!member) return { granted: [], unavailable: [] };
@@ -235,6 +270,33 @@ async function handleLevel(interaction, helpers) {
     const granted = result.granted.length ? ` Granted: **${result.granted.join(', ')}**.` : ' No new roles were needed.';
     const unavailable = result.unavailable.length ? ` Could not assign: **${result.unavailable.join(', ')}**.` : '';
     return interaction.reply({ content: `✅ Synced ${user}'s rewards for level **${level}**.${granted}${unavailable}`, flags: MessageFlags.Ephemeral });
+  }
+  if (sub === 'import-arcane') {
+    if (!await requirePermission(interaction, PermissionFlagsBits.ManageGuild, helpers)) return;
+    if (interaction.options.getString('confirmation', true) !== 'IMPORT') return helpers.replyError(interaction, 'Type `IMPORT` exactly to confirm the migration.');
+    const attachment = interaction.options.getAttachment('file', true);
+    if (!attachment.name.toLowerCase().endsWith('.csv')) return helpers.replyError(interaction, 'Upload a `.csv` file.');
+    if (attachment.size > 2_000_000) return helpers.replyError(interaction, 'The CSV must be 2 MB or smaller.');
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const fileResponse = await fetch(attachment.url);
+    if (!fileResponse.ok) return interaction.editReply('❌ The uploaded CSV could not be downloaded.');
+    let parsed;
+    try { parsed = parseArcaneCsv(await fileResponse.text()); }
+    catch (error) { return interaction.editReply(`❌ ${error.message}`); }
+    if (parsed.members.length > 10_000) return interaction.editReply('❌ A single import supports up to 10,000 members.');
+    const mode = interaction.options.getString('mode', true);
+    let modified = 0;
+    for (let start = 0; start < parsed.members.length; start += 1000) {
+      const operations = parsed.members.slice(start, start + 1000).map(({ userId, level }) => {
+        const imported = { imported_from: 'arcane', imported_at: new Date() };
+        const xp = level * level * 100;
+        const update = mode === 'replace' ? { $set: { xp, ...imported } } : { $max: { xp }, $set: imported };
+        return { updateOne: { filter: { guild_id: interaction.guildId, user_id: userId }, update: { ...update, $setOnInsert: { guild_id: interaction.guildId, user_id: userId } }, upsert: true } };
+      });
+      const result = await levels.bulkWrite(operations, { ordered: false });
+      modified += result.modifiedCount + result.upsertedCount;
+    }
+    return interaction.editReply(`✅ Imported **${parsed.members.length}** Arcane level record(s). **${modified}** database record(s) changed.${parsed.skipped ? ` Skipped **${parsed.skipped}** invalid row(s).` : ''}\nLevels were preserved; XP progress inside the current Arcane level starts at the beginning of that level.`);
   }
   if (sub === 'rank') {
     const user = interaction.options.getUser('user') || interaction.user;

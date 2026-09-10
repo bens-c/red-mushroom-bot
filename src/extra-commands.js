@@ -36,7 +36,8 @@ export const extraCommands = [
       { type: ApplicationCommandOptionType.Subcommand, name: 'role-add', description: 'Assign a reward role to a level', options: [{ type: ApplicationCommandOptionType.Integer, name: 'level', description: 'Required level', required: true, min_value: 1, max_value: 1000 }, { type: ApplicationCommandOptionType.Role, name: 'role', description: 'Role awarded at this level', required: true }] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'role-remove', description: 'Remove the reward configured for a level', options: [{ type: ApplicationCommandOptionType.Integer, name: 'level', description: 'Configured level', required: true, min_value: 1, max_value: 1000 }] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'roles', description: 'List configured level reward roles' },
-      { type: ApplicationCommandOptionType.Subcommand, name: 'role-sync', description: 'Grant all currently earned level roles', options: [user(false)] }
+      { type: ApplicationCommandOptionType.Subcommand, name: 'role-sync', description: 'Grant all currently earned level roles', options: [user(false)] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'import-arcane', description: 'Import Arcane levels from a CSV export', options: [{ type: ApplicationCommandOptionType.Attachment, name: 'file', description: 'CSV with user_id and level columns', required: true }, { type: ApplicationCommandOptionType.String, name: 'mode', description: 'How existing Red Mushroom levels are handled', required: true, choices: [{ name: 'Keep higher existing levels', value: 'keep-higher' }, { name: 'Replace with Arcane levels', value: 'replace' }] }, { type: ApplicationCommandOptionType.String, name: 'confirmation', description: 'Type IMPORT to confirm', required: true, min_length: 6, max_length: 6 }] }
     ]
   },
   {
