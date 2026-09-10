@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { commands } from '../src/commands.js';
-import { parseDuration } from '../src/extra-features.js';
+import { parseArcaneCsv, parseDuration } from '../src/extra-features.js';
 
 test('parses human-friendly durations', () => {
   assert.equal(parseDuration('10m'), 600000);
@@ -38,5 +38,12 @@ test('offers a level announcement channel and no starboard configuration', () =>
 test('includes configurable level reward role commands', () => {
   const level = commands.find(command => command.name === 'level');
   const subcommands = new Set(level.options.map(option => option.name));
-  for (const expected of ['role-add', 'role-remove', 'roles', 'role-sync']) assert.ok(subcommands.has(expected), `missing /level ${expected}`);
+  for (const expected of ['role-add', 'role-remove', 'roles', 'role-sync', 'import-arcane']) assert.ok(subcommands.has(expected), `missing /level ${expected}`);
+});
+
+test('parses Arcane CSV level migrations safely', () => {
+  const parsed = parseArcaneCsv('user_id,username,level\n123456789012345678,"Example, User",12\n234567890123456789,Broken,nope\n123456789012345678,Duplicate,10');
+  assert.deepEqual(parsed.members, [{ userId: '123456789012345678', level: 12 }]);
+  assert.equal(parsed.skipped, 1);
+  assert.throws(() => parseArcaneCsv('username,level\nExample,5'), /user_id/);
 });

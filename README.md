@@ -68,7 +68,7 @@ Each application position has its own name, open/closed state, review channel, s
 - `/help`
 - `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
 - `/clear amount [user]` to quickly delete recent messages
-- `/level rank|leaderboard|manage|role-add|role-remove|roles|role-sync`
+- `/level rank|leaderboard|manage|role-add|role-remove|roles|role-sync|import-arcane`
 - `/giveaway start|end|reroll|list`
 - `/ticket panel|close|claim|add|remove|rename|transcript` with a category dropdown panel
 - `/backup create|list|restore|delete`
@@ -92,6 +92,7 @@ Configure `ticket_category`, `transcript_channel`, and `support_role` with `/con
 - Configure the autorole with `/config set-role`; it is assigned on join independently of welcome messages. Use `/community autorole-test` to verify permissions and role hierarchy. Configure the welcome channel with `/config set-channel`, customize the messages, then enable welcome messages with `/config set-option`.
 - Use `/config set-channel` with **Level-up messages** to send level announcements to a dedicated channel. Without it, announcements remain in the channel where XP was earned.
 - Configure cumulative level rewards with `/level role-add`. Members receive every configured role at or below their level when they level up. Existing members can claim missing rewards with `/level role-sync`.
+- Migrate an Arcane leaderboard with `/level import-arcane` and a CSV containing `user_id` and `level` columns. Use **Keep higher** for a safe merge or **Replace** to use the Arcane level exactly. The import preserves levels because Arcane and Red Mushroom use different XP curves.
 - Configure `log_channel` and enable event logging to record joins, leaves, deleted/edited messages, role/channel changes, bans, and AutoMod actions.
 
 Welcome templates support `{user}`, `{username}`, `{server}`, and `{member_count}`. Custom responses support `{user}` and `{server}`.
