@@ -32,7 +32,11 @@ export const extraCommands = [
     options: [
       { type: ApplicationCommandOptionType.Subcommand, name: 'rank', description: 'Show a member rank', options: [user(false)] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'leaderboard', description: 'Show the server XP leaderboard' },
-      { type: ApplicationCommandOptionType.Subcommand, name: 'manage', description: 'Manage a member XP', options: [user(), { type: ApplicationCommandOptionType.String, name: 'action', description: 'XP operation', required: true, choices: [{ name: 'Add', value: 'add' }, { name: 'Remove', value: 'remove' }, { name: 'Set', value: 'set' }] }, { type: ApplicationCommandOptionType.Integer, name: 'amount', description: 'XP amount', required: true, min_value: 0, max_value: 10000000 }] }
+      { type: ApplicationCommandOptionType.Subcommand, name: 'manage', description: 'Manage a member XP', options: [user(), { type: ApplicationCommandOptionType.String, name: 'action', description: 'XP operation', required: true, choices: [{ name: 'Add', value: 'add' }, { name: 'Remove', value: 'remove' }, { name: 'Set', value: 'set' }] }, { type: ApplicationCommandOptionType.Integer, name: 'amount', description: 'XP amount', required: true, min_value: 0, max_value: 10000000 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'role-add', description: 'Assign a reward role to a level', options: [{ type: ApplicationCommandOptionType.Integer, name: 'level', description: 'Required level', required: true, min_value: 1, max_value: 1000 }, { type: ApplicationCommandOptionType.Role, name: 'role', description: 'Role awarded at this level', required: true }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'role-remove', description: 'Remove the reward configured for a level', options: [{ type: ApplicationCommandOptionType.Integer, name: 'level', description: 'Configured level', required: true, min_value: 1, max_value: 1000 }] },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'roles', description: 'List configured level reward roles' },
+      { type: ApplicationCommandOptionType.Subcommand, name: 'role-sync', description: 'Grant all currently earned level roles', options: [user(false)] }
     ]
   },
   {
