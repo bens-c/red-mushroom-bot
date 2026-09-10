@@ -87,6 +87,8 @@ Welcome templates support `{user}`, `{username}`, `{server}`, and `{member_count
 
 Configuration and applications are stored in the database selected by `MONGODB_DATABASE` (default: `red_mushroom_bot`) using `settings` and `applications` collections. The bot creates its required indexes at startup.
 
+The public application panel lists every currently open position and provides a dropdown for applicants to choose one.
+
 Use a dedicated Atlas database user with `readWrite` access only to this database. Put its encoded connection string in `MONGODB_URI`; never commit your `.env` file. Add the outbound IP of every machine that runs the bot to the Atlas project access list.
 
 To run the live database integration test, temporarily provide the same URI as `MONGODB_TEST_URI` and run `npm test`. Test records are uniquely named and removed afterward.

@@ -348,9 +348,15 @@ async function handleApplicationCommand(interaction) {
     if (!isManager(interaction)) return replyError(interaction, 'You need Manage Server or the configured manager role.');
     const openPositions = await positions.find({ guild_id: interaction.guildId, open: true }).sort({ name: 1 }).limit(25).toArray();
     if (!openPositions.length) return replyError(interaction, 'No application positions are open. Add one with `/application position-add`.');
+    const panelDescription = getSetting(interaction.guildId, 'application_description').slice(0, 750);
     const embed = brandEmbed(interaction.guildId)
-      .setTitle(getSetting(interaction.guildId, 'application_title'))
-      .setDescription(`${getSetting(interaction.guildId, 'application_description')}\n\nSelect the position you want to apply for below.`);
+      .setTitle(getSetting(interaction.guildId, 'application_title').slice(0, 256))
+      .setDescription(`${panelDescription}\n\n### Open applications\nEvery position currently accepting applications is shown below. Select one from the menu to apply.`)
+      .addFields(openPositions.map(position => ({
+        name: `🟢 ${position.name}`.slice(0, 256),
+        value: (position.description || `Applications are open for ${position.name}.`).slice(0, 1024),
+        inline: true
+      })));
     const menu = new StringSelectMenuBuilder()
       .setCustomId('application:position')
       .setPlaceholder('Choose an open position...')
