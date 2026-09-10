@@ -184,9 +184,58 @@ function levelFromXp(xp) {
   return Math.floor(Math.sqrt(Math.max(0, xp) / 100));
 }
 
+async function grantLevelRoles(guild, userId, level) {
+  const member = await guild.members.fetch(userId).catch(() => null);
+  if (!member) return { granted: [], unavailable: [] };
+  const rewards = await getCollection('level_roles').find({ guild_id: guild.id, level: { $lte: level } }).sort({ level: 1 }).toArray();
+  const granted = [];
+  const unavailable = [];
+  for (const reward of rewards) {
+    if (member.roles.cache.has(reward.role_id)) continue;
+    const role = await guild.roles.fetch(reward.role_id).catch(() => null);
+    if (!role?.editable) {
+      unavailable.push(role?.name || `role ${reward.role_id}`);
+      continue;
+    }
+    await member.roles.add(role, `Level ${reward.level} reward`).then(() => granted.push(role.name)).catch(() => unavailable.push(role.name));
+  }
+  return { granted, unavailable };
+}
+
 async function handleLevel(interaction, helpers) {
   const sub = interaction.options.getSubcommand();
   const levels = getCollection('levels');
+  const levelRoles = getCollection('level_roles');
+  if (sub === 'roles') {
+    const rewards = await levelRoles.find({ guild_id: interaction.guildId }).sort({ level: 1 }).toArray();
+    const text = rewards.length ? rewards.map(reward => `**Level ${reward.level}:** <@&${reward.role_id}>`).join('\n') : 'No level reward roles are configured.';
+    return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Level reward roles').setDescription(text)], flags: MessageFlags.Ephemeral });
+  }
+  if (sub === 'role-add') {
+    if (!await requirePermission(interaction, PermissionFlagsBits.ManageGuild, helpers)) return;
+    const level = interaction.options.getInteger('level', true);
+    const role = interaction.options.getRole('role', true);
+    if (role.id === interaction.guildId || role.managed) return helpers.replyError(interaction, 'Choose a normal server role.');
+    if (!role.editable) return helpers.replyError(interaction, 'Move my bot role above that reward role first.');
+    await levelRoles.updateOne({ guild_id: interaction.guildId, level }, { $set: { guild_id: interaction.guildId, level, role_id: role.id, updated_by: interaction.user.id, updated_at: new Date() }, $setOnInsert: { created_at: new Date() } }, { upsert: true });
+    return interaction.reply({ content: `✅ ${role} will be awarded at **level ${level}**.`, flags: MessageFlags.Ephemeral });
+  }
+  if (sub === 'role-remove') {
+    if (!await requirePermission(interaction, PermissionFlagsBits.ManageGuild, helpers)) return;
+    const level = interaction.options.getInteger('level', true);
+    const result = await levelRoles.deleteOne({ guild_id: interaction.guildId, level });
+    return interaction.reply({ content: result.deletedCount ? `✅ Removed the reward for **level ${level}**.` : `ℹ️ No reward is configured for level ${level}.`, flags: MessageFlags.Ephemeral });
+  }
+  if (sub === 'role-sync') {
+    const user = interaction.options.getUser('user') || interaction.user;
+    if (user.id !== interaction.user.id && !await requirePermission(interaction, PermissionFlagsBits.ManageGuild, helpers)) return;
+    const row = await levels.findOne({ guild_id: interaction.guildId, user_id: user.id });
+    const level = levelFromXp(row?.xp || 0);
+    const result = await grantLevelRoles(interaction.guild, user.id, level);
+    const granted = result.granted.length ? ` Granted: **${result.granted.join(', ')}**.` : ' No new roles were needed.';
+    const unavailable = result.unavailable.length ? ` Could not assign: **${result.unavailable.join(', ')}**.` : '';
+    return interaction.reply({ content: `✅ Synced ${user}'s rewards for level **${level}**.${granted}${unavailable}`, flags: MessageFlags.Ephemeral });
+  }
   if (sub === 'rank') {
     const user = interaction.options.getUser('user') || interaction.user;
     const row = await levels.findOne({ guild_id: interaction.guildId, user_id: user.id });
@@ -206,7 +255,10 @@ async function handleLevel(interaction, helpers) {
   const update = action === 'set' ? { $set: { xp: amount } } : { $inc: { xp: action === 'add' ? amount : -amount } };
   await levels.updateOne({ guild_id: interaction.guildId, user_id: user.id }, { ...update, $setOnInsert: { guild_id: interaction.guildId, user_id: user.id } }, { upsert: true });
   await levels.updateOne({ guild_id: interaction.guildId, user_id: user.id, xp: { $lt: 0 } }, { $set: { xp: 0 } });
-  return interaction.reply({ content: `✅ XP ${action} operation completed for ${user}.`, flags: MessageFlags.Ephemeral });
+  const row = await levels.findOne({ guild_id: interaction.guildId, user_id: user.id });
+  const rewards = await grantLevelRoles(interaction.guild, user.id, levelFromXp(row?.xp || 0));
+  const roleText = rewards.granted.length ? ` Granted: **${rewards.granted.join(', ')}**.` : '';
+  return interaction.reply({ content: `✅ XP ${action} operation completed for ${user}.${roleText}`, flags: MessageFlags.Ephemeral });
 }
 
 async function findGiveaway(guildId, identifier) {
@@ -520,9 +572,11 @@ export async function handleMessage(message) {
       const oldXp = before?.xp || 0;
       const newXp = oldXp + gained;
       if (levelFromXp(newXp) > levelFromXp(oldXp)) {
+        const rewards = await grantLevelRoles(message.guild, message.author.id, levelFromXp(newXp));
         const channelId = getSetting(message.guild.id, 'level_channel');
         const levelChannel = channelId ? await message.guild.channels.fetch(channelId).catch(() => null) : message.channel;
-        if (levelChannel?.isTextBased()) await levelChannel.send(`🎉 ${message.author}, you reached **level ${levelFromXp(newXp)}**!`).catch(() => {});
+        const roleText = rewards.granted.length ? ` You earned **${rewards.granted.join(', ')}**!` : '';
+        if (levelChannel?.isTextBased()) await levelChannel.send(`🎉 ${message.author}, you reached **level ${levelFromXp(newXp)}**!${roleText}`).catch(() => {});
       }
     }
   }

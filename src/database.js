@@ -73,6 +73,7 @@ export async function initializeDatabase() {
     databaseHandle.collection('moderation_cases').createIndex({ guild_id: 1, user_id: 1, created_at: -1 }),
     databaseHandle.collection('levels').createIndex({ guild_id: 1, xp: -1 }),
     databaseHandle.collection('levels').createIndex({ guild_id: 1, user_id: 1 }, { unique: true }),
+    databaseHandle.collection('level_roles').createIndex({ guild_id: 1, level: 1 }, { unique: true }),
     databaseHandle.collection('giveaways').createIndex({ status: 1, ends_at: 1 }),
     databaseHandle.collection('tickets').createIndex({ guild_id: 1, channel_id: 1 }, { unique: true }),
     databaseHandle.collection('reminders').createIndex({ delivered: 1, due_at: 1 }),
@@ -89,7 +90,7 @@ export async function initializeDatabase() {
 
 export function getCollection(name) {
   if (!databaseHandle) throw new Error('Database has not been initialized.');
-  const allowed = ['moderation_cases', 'levels', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'automod_violations', 'staff_roles', 'staff_movements', 'application_categories', 'web_sessions'];
+  const allowed = ['moderation_cases', 'levels', 'level_roles', 'giveaways', 'tickets', 'reminders', 'backups', 'afk', 'custom_commands', 'stickies', 'reaction_roles', 'automod_violations', 'staff_roles', 'staff_movements', 'application_categories', 'web_sessions'];
   if (!allowed.includes(name)) throw new Error(`Collection ${name} is not available.`);
   return databaseHandle.collection(name);
 }

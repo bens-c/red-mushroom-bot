@@ -34,3 +34,9 @@ test('offers a level announcement channel and no starboard configuration', () =>
   assert.match(serialized, /level_channel/);
   assert.doesNotMatch(serialized, /starboard/i);
 });
+
+test('includes configurable level reward role commands', () => {
+  const level = commands.find(command => command.name === 'level');
+  const subcommands = new Set(level.options.map(option => option.name));
+  for (const expected of ['role-add', 'role-remove', 'roles', 'role-sync']) assert.ok(subcommands.has(expected), `missing /level ${expected}`);
+});
