@@ -111,9 +111,8 @@ export const extraCommands = [
     ]
   },
   {
-    name: 'community', description: 'Starboard, welcome, autorole, and managed embeds', dm_permission: false,
+    name: 'community', description: 'Welcome, autorole, logs, and managed embeds', dm_permission: false,
     options: [
-      { type: ApplicationCommandOptionType.Subcommand, name: 'starboard', description: 'Configure the starboard', options: [{ type: ApplicationCommandOptionType.Channel, name: 'channel', description: 'Starboard channel', required: true, channel_types: textChannel }, { type: ApplicationCommandOptionType.Integer, name: 'threshold', description: 'Reactions required', required: true, min_value: 2, max_value: 50 }, { type: ApplicationCommandOptionType.String, name: 'emoji', description: 'Starboard emoji', max_length: 100 }] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'welcome-test', description: 'Preview the configured welcome message' },
       { type: ApplicationCommandOptionType.Subcommand, name: 'autorole-test', description: 'Test the configured automatic member role', options: [user(false)] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'embed', description: 'Send a managed embed', options: [{ type: ApplicationCommandOptionType.String, name: 'title', description: 'Embed title', required: true, max_length: 256 }, { type: ApplicationCommandOptionType.String, name: 'description', description: 'Embed content; use \\n for new lines', required: true, max_length: 4000 }, { type: ApplicationCommandOptionType.Channel, name: 'channel', description: 'Destination channel', channel_types: textChannel }, { type: ApplicationCommandOptionType.String, name: 'color', description: 'Optional #RRGGBB color', max_length: 7 }] },

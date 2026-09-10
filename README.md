@@ -1,6 +1,6 @@
 # Red Mushroom Staff Bot
 
-A single configurable Discord bot for staff applications, moderation, XP levels, giveaways, tickets, sticky messages, reaction roles, native AutoMod, starboard, welcome/autoroles, safe server backups, staff movements, announcements, utilities, and audit logging.
+A single configurable Discord bot for staff applications, moderation, XP levels, giveaways, tickets, sticky messages, reaction roles, native AutoMod, welcome/autoroles, safe server backups, staff movements, announcements, utilities, and audit logging.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ All configuration is done through Discord slash commands and stored separately p
 5. Add open positions with `/application position-add`, then use `/application panel` wherever applicants should see the position dropdown.
 6. Use `/config view` at any time to inspect the effective setup.
 
-Until `/config setup` reports that setup is complete, normal commands remain locked. Required settings cover applications, staff movements, logging, announcements, manager/reviewer access, and the enabled ticket, starboard, or welcome modules. `/config`, `/help`, and centrally authorized `/maintenance` remain available in setup mode.
+Until `/config setup` reports that setup is complete, normal commands remain locked. Required settings cover applications, staff movements, logging, announcements, manager/reviewer access, and the enabled ticket or welcome modules. `/config`, `/help`, and centrally authorized `/maintenance` remain available in setup mode.
 
 Questions 2–5 can be disabled by setting their value to `off`. Question 1 is always required. Application decisions are atomic, so two reviewers cannot process the same application twice.
 
@@ -62,7 +62,7 @@ Each application position has its own name, open/closed state, review channel, s
 - `/sticky set|stop|start|remove|list`
 - `/reaction-role add|remove|list`
 - `/automod keyword-add|keyword-remove|spam|mentions|status|violations`
-- `/community starboard|welcome-test|embed|logs`
+- `/community welcome-test|embed|logs`
 
 The `/staff` command can add and remove roles in the same action. Its announcement template supports `{user}`, `{actor}`, `{action}`, `{position}`, `{reason}`, and `{server}`. Decision DM templates support `{server}` and `{reason}`.
 
@@ -76,7 +76,7 @@ Configure `ticket_category`, `transcript_channel`, and `support_role` with `/con
 - Use `/reaction-role add` with an existing message ID, channel, emoji, and role. The bot role must be above every self-assignable role.
 - Use `/automod` to manage Discord-native keyword, spam, and mention-spam rules. This works without the privileged Message Content intent.
 - Configure the autorole with `/config set-role`; it is assigned on join independently of welcome messages. Use `/community autorole-test` to verify permissions and role hierarchy. Configure the welcome channel with `/config set-channel`, customize the messages, then enable welcome messages with `/config set-option`.
-- Use `/community starboard` to select its channel, emoji, and reaction threshold.
+- Use `/config set-channel` with **Level-up messages** to send level announcements to a dedicated channel. Without it, announcements remain in the channel where XP was earned.
 - Configure `log_channel` and enable event logging to record joins, leaves, deleted/edited messages, role/channel changes, bans, and AutoMod actions.
 
 Welcome templates support `{user}`, `{username}`, `{server}`, and `{member_count}`. Custom responses support `{user}` and `{server}`.

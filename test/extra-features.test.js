@@ -28,3 +28,9 @@ test('includes every all-in-one module command group', () => {
     assert.ok(names.has(expected), `missing ${expected}`);
   }
 });
+
+test('offers a level announcement channel and no starboard configuration', () => {
+  const serialized = JSON.stringify(commands);
+  assert.match(serialized, /level_channel/);
+  assert.doesNotMatch(serialized, /starboard/i);
+});
