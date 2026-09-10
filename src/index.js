@@ -20,7 +20,7 @@ import {
 } from 'discord.js';
 import { commands } from './commands.js';
 import { handleAutomaticStaffMovement, handleStaffRolesCommand, suppressAutomaticStaffMovement } from './staff-movements.js';
-import { handleExtraButton, handleExtraCommand, handleExtraSelect, handleMessage, startBackgroundJobs } from './extra-features.js';
+import { handleExtraButton, handleExtraCommand, handleExtraModal, handleExtraSelect, handleMessage, startBackgroundJobs } from './extra-features.js';
 import {
   handleAutoModerationExecution,
   handleDiscordEvent,
@@ -519,6 +519,7 @@ async function handleSelectMenu(interaction) {
 }
 
 async function handleModal(interaction) {
+  if (await handleExtraModal(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
   const submission = interaction.customId.match(/^application:submit(?::([a-z0-9_-]{1,32}))?$/i);
   if (submission) return submitApplication(interaction, submission[1] || null);
   const match = interaction.customId.match(/^application:decision:(accept|reject):([a-f0-9]{24})$/i);

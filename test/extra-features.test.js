@@ -41,6 +41,11 @@ test('includes configurable level reward role commands', () => {
   for (const expected of ['role-add', 'role-remove', 'roles', 'role-sync', 'import-arcane']) assert.ok(subcommands.has(expected), `missing /level ${expected}`);
 });
 
+test('includes an interactive giveaway control panel', () => {
+  const giveaway = commands.find(command => command.name === 'giveaway');
+  assert.ok(giveaway.options.some(option => option.name === 'panel'));
+});
+
 test('parses Arcane CSV level migrations safely', () => {
   const parsed = parseArcaneCsv('user_id,username,level\n123456789012345678,"Example, User",12\n234567890123456789,Broken,nope\n123456789012345678,Duplicate,10');
   assert.deepEqual(parsed.members, [{ userId: '123456789012345678', level: 12 }]);

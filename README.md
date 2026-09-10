@@ -55,7 +55,7 @@ Each application position has its own name, open/closed state, review channel, s
 - `/moderation ban|kick|timeout|warn|warnings|clear-warnings|purge|lock|unlock|slowmode`
 - `/clear amount [user]` to quickly delete recent messages
 - `/level rank|leaderboard|manage|role-add|role-remove|roles|role-sync|import-arcane`
-- `/giveaway start|end|reroll|list`
+- `/giveaway panel|start|end|reroll|list` — interactive giveaway GUI plus quick commands
 - `/ticket panel|close|claim|add|remove|rename|transcript` with a category dropdown panel
 - `/backup create|list|restore|delete`
 - `/utility ping|avatar|userinfo|serverinfo|poll|remind|afk|custom-add|custom-run|custom-list|custom-delete`

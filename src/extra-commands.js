@@ -43,6 +43,7 @@ export const extraCommands = [
   {
     name: 'giveaway', description: 'Create and manage button giveaways', dm_permission: false,
     options: [
+      { type: ApplicationCommandOptionType.Subcommand, name: 'panel', description: 'Open the interactive giveaway control panel' },
       { type: ApplicationCommandOptionType.Subcommand, name: 'start', description: 'Start a giveaway', options: [{ type: ApplicationCommandOptionType.String, name: 'duration', description: 'Examples: 10m, 2h, 3d', required: true }, { type: ApplicationCommandOptionType.Integer, name: 'winners', description: 'Number of winners', required: true, min_value: 1, max_value: 20 }, { type: ApplicationCommandOptionType.String, name: 'prize', description: 'Prize', required: true, max_length: 256 }, { type: ApplicationCommandOptionType.Channel, name: 'channel', description: 'Giveaway channel', channel_types: textChannel }] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'end', description: 'End a giveaway now', options: [{ type: ApplicationCommandOptionType.String, name: 'id', description: 'Giveaway ID or message ID', required: true }] },
       { type: ApplicationCommandOptionType.Subcommand, name: 'reroll', description: 'Reroll an ended giveaway', options: [{ type: ApplicationCommandOptionType.String, name: 'id', description: 'Giveaway ID or message ID', required: true }] },
