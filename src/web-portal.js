@@ -12,7 +12,7 @@ const publicDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '../pub
 const channelSettings = {
   application_channel: 'Application reviews', movement_channel: 'Staff movements', log_channel: 'Audit log',
   announcement_channel: 'General announcements', ticket_category: 'Ticket category', transcript_channel: 'Ticket transcripts',
-  welcome_channel: 'Welcome messages', starboard_channel: 'Starboard'
+  welcome_channel: 'Welcome messages', level_channel: 'Level-up messages'
 };
 const roleSettings = {
   manager_role: 'Bot managers', reviewer_role: 'Application reviewers', accepted_role: 'Default accepted role',
@@ -21,7 +21,7 @@ const roleSettings = {
 const optionSettings = {
   dm_on_decision: 'Application decision DMs', moderation_enabled: 'Moderation', levels_enabled: 'XP and levels',
   giveaways_enabled: 'Giveaways', tickets_enabled: 'Tickets', backups_enabled: 'Backups', sticky_enabled: 'Sticky messages',
-  reaction_roles_enabled: 'Reaction roles', automod_enabled: 'Native AutoMod', starboard_enabled: 'Starboard',
+  reaction_roles_enabled: 'Reaction roles', automod_enabled: 'Native AutoMod',
   event_logs_enabled: 'Event logs', welcome_enabled: 'Welcome messages'
 };
 const textSettings = {

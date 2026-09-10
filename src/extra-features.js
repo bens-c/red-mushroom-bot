@@ -519,7 +519,11 @@ export async function handleMessage(message) {
       );
       const oldXp = before?.xp || 0;
       const newXp = oldXp + gained;
-      if (levelFromXp(newXp) > levelFromXp(oldXp)) await message.channel.send(`🎉 ${message.author}, you reached **level ${levelFromXp(newXp)}**!`).catch(() => {});
+      if (levelFromXp(newXp) > levelFromXp(oldXp)) {
+        const channelId = getSetting(message.guild.id, 'level_channel');
+        const levelChannel = channelId ? await message.guild.channels.fetch(channelId).catch(() => null) : message.channel;
+        if (levelChannel?.isTextBased()) await levelChannel.send(`🎉 ${message.author}, you reached **level ${levelFromXp(newXp)}**!`).catch(() => {});
+      }
     }
   }
   const ownAfk = await getCollection('afk').findOneAndDelete({ guild_id: message.guild.id, user_id: message.author.id });

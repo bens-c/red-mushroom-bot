@@ -6,7 +6,7 @@ import {
   MessageFlags,
   PermissionFlagsBits
 } from 'discord.js';
-import { getCollection, getSetting, setSetting } from './database.js';
+import { getCollection, getSetting } from './database.js';
 
 const ruleNames = {
   keywords: 'Red Mushroom • Blocked Keywords',
@@ -220,18 +220,6 @@ async function handleCommunity(interaction, helpers) {
     return interaction.reply({ embeds: [(await helpers.brandEmbed(interaction.guildId)).setTitle('Community logs').setDescription(lines.join('\n').slice(0, 4096) || 'No records found.')], flags: MessageFlags.Ephemeral });
   }
   if (!await requireManager(interaction, helpers)) return;
-  if (sub === 'starboard') {
-    const channel = interaction.options.getChannel('channel', true);
-    const threshold = interaction.options.getInteger('threshold', true);
-    const emoji = interaction.options.getString('emoji') || '⭐';
-    await Promise.all([
-      setSetting(interaction.guildId, 'starboard_channel', channel.id),
-      setSetting(interaction.guildId, 'starboard_threshold', threshold),
-      setSetting(interaction.guildId, 'starboard_emoji', emoji),
-      setSetting(interaction.guildId, 'starboard_enabled', 'true')
-    ]);
-    return interaction.reply({ content: `✅ Starboard configured in ${channel}: ${emoji} × ${threshold}.`, flags: MessageFlags.Ephemeral });
-  }
   if (sub === 'welcome-test') {
     const channelId = getSetting(interaction.guildId, 'welcome_channel');
     const channel = channelId ? await interaction.guild.channels.fetch(channelId).catch(() => null) : interaction.channel;
@@ -295,44 +283,6 @@ export async function handleReactionRole(reaction, user, added) {
       }
     }
   }
-  await updateStarboard(reaction).catch(console.error);
-}
-
-async function updateStarboard(reaction) {
-  const guild = reaction.message.guild;
-  if (!guild || getSetting(guild.id, 'starboard_enabled') !== 'true') return;
-  const configuredEmoji = emojiKey(getSetting(guild.id, 'starboard_emoji'));
-  if ((reaction.emoji.id || reaction.emoji.name) !== configuredEmoji) return;
-  const channelId = getSetting(guild.id, 'starboard_channel');
-  if (!channelId || reaction.message.channelId === channelId) return;
-  const threshold = Number(getSetting(guild.id, 'starboard_threshold')) || 3;
-  const reactionCount = Math.max(0, reaction.count - (reaction.me ? 1 : 0));
-  const entries = getCollection('starboard_entries');
-  const existing = await entries.findOne({ guild_id: guild.id, source_message_id: reaction.message.id });
-  const starboard = await guild.channels.fetch(channelId).catch(() => null);
-  if (!starboard?.isTextBased()) return;
-  if (reactionCount < threshold) {
-    if (existing) {
-      await starboard.messages.delete(existing.starboard_message_id).catch(() => {});
-      await entries.deleteOne({ _id: existing._id });
-    }
-    return;
-  }
-  const source = await reaction.message.fetch();
-  const attachment = source.attachments.find(item => item.contentType?.startsWith('image/'));
-  const embed = new EmbedBuilder()
-    .setColor(0xf1c40f)
-    .setAuthor({ name: source.author.tag, iconURL: source.author.displayAvatarURL() })
-    .setDescription(`${source.content || '*No text content*'}\n\n[Jump to message](${source.url})`.slice(0, 4096))
-    .setFooter({ text: `${getSetting(guild.id, 'starboard_emoji')} ${reactionCount} • #${source.channel.name}` })
-    .setTimestamp(source.createdAt);
-  if (attachment) embed.setImage(attachment.url);
-  if (existing) {
-    const target = await starboard.messages.fetch(existing.starboard_message_id).catch(() => null);
-    if (target) return target.edit({ embeds: [embed] });
-  }
-  const posted = await starboard.send({ embeds: [embed] });
-  await entries.updateOne({ guild_id: guild.id, source_message_id: source.id }, { $set: { source_channel_id: source.channelId, starboard_channel_id: channelId, starboard_message_id: posted.id, updated_at: new Date() } }, { upsert: true });
 }
 
 export async function assignAutorole(member) {

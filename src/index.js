@@ -56,7 +56,7 @@ if (!token || !clientId) {
   process.exit(1);
 }
 
-const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel', 'ticket_category', 'transcript_channel', 'welcome_channel', 'starboard_channel'];
+const channelKeys = ['application_channel', 'movement_channel', 'log_channel', 'announcement_channel', 'ticket_category', 'transcript_channel', 'welcome_channel', 'level_channel'];
 const roleKeys = ['manager_role', 'reviewer_role', 'accepted_role', 'support_role', 'autorole_role'];
 const allKeys = [...settingKeys, ...channelKeys, ...roleKeys];
 const setupLabels = {
@@ -66,7 +66,7 @@ const setupLabels = {
   announcement_channel: 'General announcements channel',
   ticket_category: 'Ticket category',
   transcript_channel: 'Ticket transcripts channel',
-  starboard_channel: 'Starboard channel',
+  level_channel: 'Level-up messages channel',
   welcome_channel: 'Welcome channel',
   manager_role: 'Bot managers role',
   reviewer_role: 'Application reviewers role',
@@ -153,7 +153,6 @@ function getSetupState(guild) {
     'reviewer_role'
   ];
   if (getSetting(guild.id, 'tickets_enabled') === 'true') required.push('ticket_category', 'transcript_channel', 'support_role');
-  if (getSetting(guild.id, 'starboard_enabled') === 'true') required.push('starboard_channel');
   if (getSetting(guild.id, 'welcome_enabled') === 'true') required.push('welcome_channel');
   const missing = required.filter(key => {
     const id = getSetting(guild.id, key);
@@ -671,7 +670,7 @@ async function handleHelp(interaction) {
       { name: 'Staff & communication', value: '`/staff` — record a movement\n`/staff-roles` — automatic promotion/demotion posts\n`/announce` — post a branded announcement' },
       { name: 'Community management', value: '`/moderation` — bans, kicks, timeouts, warnings, locks, and slowmode\n`/clear` — quickly delete recent messages\n`/level` — XP ranks and leaderboard\n`/giveaway` — manage giveaways' },
       { name: 'Support & safety', value: '`/ticket` — panels, private tickets, claims, members, transcripts, and closing\n`/backup` — create, list, safely restore, and delete server backups\n`/utility` — info, polls, reminders, AFK, and custom responses' },
-      { name: 'Automation & roles', value: '`/sticky` — persistent channel messages\n`/reaction-role` — normal, verify, and drop reaction roles\n`/automod` — native keyword, spam, and mention filters\n`/community` — starboard, welcome preview, embeds, and logs' },
+      { name: 'Automation & roles', value: '`/sticky` — persistent channel messages\n`/reaction-role` — normal, verify, and drop reaction roles\n`/automod` — native keyword, spam, and mention filters\n`/community` — welcome preview, embeds, and logs' },
       { name: 'Template placeholders', value: 'Movement: `{user}` `{actor}` `{action}` `{position}` `{reason}` `{server}`\nDecision DMs: `{server}` `{reason}`' }
     );
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
