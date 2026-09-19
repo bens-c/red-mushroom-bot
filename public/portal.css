@@ -242,6 +242,52 @@ header h1 {
 .section-head p {
   color: var(--muted);
 }
+.profile-editor {
+  display: grid;
+  grid-template-columns: 180px minmax(260px, 1fr);
+  gap: 28px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #110e10;
+}
+.profile-editor > img {
+  width: 180px;
+  height: 180px;
+  object-fit: cover;
+  border: 3px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel2);
+}
+.profile-editor > div {
+  display: grid;
+  gap: 14px;
+}
+.profile-editor input[type="file"] {
+  display: none;
+}
+.file-picker {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border: 1px dashed #72505a;
+  border-radius: 12px;
+  background: var(--panel2);
+  cursor: pointer;
+}
+.file-picker:hover {
+  border-color: var(--red2);
+}
+.file-picker span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
 .setting-row {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr);
@@ -493,6 +539,13 @@ button:disabled {
   }
   .setting-row {
     grid-template-columns: 1fr;
+  }
+  .profile-editor {
+    grid-template-columns: 1fr;
+  }
+  .profile-editor > img {
+    width: 140px;
+    height: 140px;
   }
   .welcome {
     min-height: 0;

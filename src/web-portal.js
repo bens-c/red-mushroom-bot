@@ -33,6 +33,7 @@ const textSettings = {
 };
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const GUILD_CACHE_TTL_MS = 15_000;
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 let webServer;
 const guildCache = new Map();
 
@@ -154,14 +155,46 @@ async function requireGuildAdmin(session, guildId, config, knownAdminGuilds = nu
   let guild;
   try { guild = await discordRequest(`/guilds/${guildId}?with_counts=true`, { token: config.botToken }); }
   catch (error) { if (error.status === 403 || error.status === 404) return null; throw error; }
-  const [channels, roles] = await Promise.all([
+  const [channels, roles, botMember] = await Promise.all([
     discordRequest(`/guilds/${guildId}/channels`, { token: config.botToken }),
-    discordRequest(`/guilds/${guildId}/roles`, { token: config.botToken })
+    discordRequest(`/guilds/${guildId}/roles`, { token: config.botToken }),
+    discordRequest(`/guilds/${guildId}/members/${config.clientId}`, { token: config.botToken })
   ]);
   guild.memberCount = guild.approximate_member_count || 0;
   guild.channels = channels;
   guild.roles = roles;
+  guild.botMember = botMember;
   return guild;
+}
+
+export function guildBotAvatarUrl(guildId, member) {
+  const user = member?.user;
+  if (!user?.id) return 'https://cdn.discordapp.com/embed/avatars/0.png';
+  if (member.avatar) {
+    const extension = member.avatar.startsWith('a_') ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/guilds/${guildId}/users/${user.id}/avatars/${member.avatar}.${extension}?size=256`;
+  }
+  if (user.avatar) {
+    const extension = user.avatar.startsWith('a_') ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${extension}?size=256`;
+  }
+  const fallback = user.discriminator === '0' ? Number((BigInt(user.id) >> 22n) % 6n) : Number(user.discriminator || 0) % 5;
+  return `https://cdn.discordapp.com/embed/avatars/${fallback}.png`;
+}
+
+export function validatedAvatarData(value) {
+  if (value === null) return null;
+  const match = String(value || '').match(/^data:image\/(png|jpeg|gif);base64,([a-z0-9+/]+={0,2})$/i);
+  if (!match) throw new Error('Choose a PNG, JPG, or GIF image.');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (!bytes.length || bytes.length > MAX_AVATAR_BYTES) throw new Error('The profile image must be 2 MB or smaller.');
+  const validSignature = match[1].toLowerCase() === 'png'
+    ? bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    : match[1].toLowerCase() === 'jpeg'
+      ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes.at(-2) === 0xff && bytes.at(-1) === 0xd9
+      : bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a';
+  if (!validSignature) throw new Error('The uploaded file is not a valid image.');
+  return value;
 }
 
 function positionKey(name) {
@@ -198,9 +231,11 @@ function guildDashboard(guild, settings, positions) {
   const optionForms = Object.entries(optionSettings).map(([key, label]) => settingForm('option', key, label, `<select name="value"><option value="true"${settings[key] === 'true' ? ' selected' : ''}>Enabled</option><option value="false"${settings[key] !== 'true' ? ' selected' : ''}>Disabled</option></select>`)).join('');
   const textForms = Object.entries(textSettings).map(([key, label]) => settingForm('text', key, label, key.includes('description') || key.includes('message') || key.includes('template') ? `<textarea name="value" rows="3">${escapeHtml(settings[key])}</textarea>` : `<input name="value" value="${escapeHtml(settings[key])}" maxlength="1000">`)).join('');
   const positionRows = positions.map(position => `<article class="position"><div><span class="status ${position.open ? 'on' : 'off'}"></span><strong>${escapeHtml(position.name)}</strong><small>${escapeHtml(position.description)}</small><p>Review: #${escapeHtml(guild.channels.find(channel => channel.id === position.review_channel_id)?.name || 'missing')} ${position.accepted_role_id ? ` · Role: @${escapeHtml(guild.roles.find(role => role.id === position.accepted_role_id)?.name || 'missing')}` : ''}</p></div><div class="position-actions"><form class="api-form" action="application-positions/${encodeURIComponent(position.key)}/toggle" method="post"><input type="hidden" name="open" value="${position.open ? 'false' : 'true'}"><button>${position.open ? 'Close' : 'Open'}</button></form><form class="api-form" action="application-positions/${encodeURIComponent(position.key)}" method="delete"><button class="danger">Remove</button></form></div></article>`).join('');
+  const botAvatarUrl = guildBotAvatarUrl(guild.id, guild.botMember);
   return `<div class="stats"><article><span>SERVER</span><strong>${guild.memberCount}</strong><small>members</small></article><article><span>MODULES</span><strong>${Object.keys(optionSettings).filter(key => settings[key] === 'true').length}</strong><small>enabled</small></article><article><span>APPLICATIONS</span><strong>${positions.filter(position => position.open).length}</strong><small>positions open</small></article></div>
-    <div class="tabs"><button class="active" data-tab="overview">Overview</button><button data-tab="channels">Channels</button><button data-tab="roles">Roles</button><button data-tab="modules">Modules</button><button data-tab="applications">Applications</button><button data-tab="text">Text & brand</button></div>
+    <div class="tabs"><button class="active" data-tab="overview">Overview</button><button data-tab="profile">Bot profile</button><button data-tab="channels">Channels</button><button data-tab="roles">Roles</button><button data-tab="modules">Modules</button><button data-tab="applications">Applications</button><button data-tab="text">Text & brand</button></div>
     <section class="panel active" data-panel="overview"><div class="welcome"><div><p class="eyebrow">READY TO CONFIGURE</p><h2>Everything in one place.</h2><p>Changes are stored instantly for this server. Discord Administrator permission is verified before every save.</p></div><div class="orb">🍄</div></div></section>
+    <section class="panel" data-panel="profile"><div class="section-head"><h2>Server bot profile</h2><p>Set a profile image used by the bot only in <strong>${escapeHtml(guild.name)}</strong>. Other servers keep their own image.</p></div><div class="profile-editor"><img id="bot-avatar-preview" src="${escapeHtml(botAvatarUrl)}" alt="Current bot profile image"><div><label class="file-picker" for="bot-avatar-file"><strong>Choose profile image</strong><span>PNG, JPG, or GIF · maximum 2 MB</span></label><input id="bot-avatar-file" type="file" accept="image/png,image/jpeg,image/gif"><div class="profile-actions"><button id="bot-avatar-upload" class="primary" type="button">Upload image</button><button id="bot-avatar-reset" class="danger" type="button">Reset to global avatar</button></div><p class="muted">A square image works best. The change is sent directly to Discord.</p></div></div></section>
     <section class="panel" data-panel="channels"><div class="section-head"><h2>Channels</h2><p>Choose where each bot feature should post.</p></div>${channelForms}</section>
     <section class="panel" data-panel="roles"><div class="section-head"><h2>Roles</h2><p>Assign access, support, and automatic roles.</p></div>${roleForms}</section>
     <section class="panel" data-panel="modules"><div class="section-head"><h2>Modules</h2><p>Enable only the systems your community uses.</p></div>${optionForms}</section>
@@ -241,6 +276,7 @@ export function createWebPortalApp(config = {}) {
   const app = express();
   if (process.env.WEB_TRUST_PROXY === 'true') app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'https://cdn.discordapp.com'] } } }));
+  app.use('/api/guilds/:guildId/profile-avatar', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(express.urlencoded({ extended: false, limit: '32kb' }));
   app.use(express.static(publicDirectory, { maxAge: '1h', index: false }));
@@ -336,6 +372,30 @@ export function createWebPortalApp(config = {}) {
       response.json({ ok: true, message: `${settings.length} ${settings.length === 1 ? 'setting' : 'settings'} saved.` });
     } catch (error) {
       response.status(400).json({ error: error.message });
+    }
+  });
+  app.post('/api/guilds/:guildId/profile-avatar', async (request, response) => {
+    try {
+      const avatar = validatedAvatarData(request.body.avatar);
+      const member = await discordRequest(`/guilds/${request.portalGuild.id}/members/@me`, {
+        token: portalConfig.botToken,
+        method: 'PATCH',
+        body: { avatar }
+      });
+      const updatedMember = { ...member, user: member.user || request.portalGuild.botMember?.user };
+      guildCache.delete(String(request.portalSession._id));
+      response.json({
+        ok: true,
+        message: avatar ? 'Server profile image updated.' : 'Server profile image reset to the global avatar.',
+        avatarUrl: guildBotAvatarUrl(request.portalGuild.id, updatedMember)
+      });
+    } catch (error) {
+      const message = error.status === 429
+        ? 'Discord is rate-limiting profile changes. Please wait before trying again.'
+        : error.status
+          ? 'Discord rejected the profile image. Check the format and try again.'
+          : error.message;
+      response.status(error.status === 429 ? 429 : 400).json({ error: message });
     }
   });
   app.post('/api/guilds/:guildId/application-positions', async (request, response) => {
