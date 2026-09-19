@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createWebPortalApp, guildBotAvatarUrl, validatedAvatarData } from '../src/web-portal.js';
+import { createWebPortalApp, guildBotAvatarUrl, guildBotBannerUrl, validatedAvatarData, validatedBannerData } from '../src/web-portal.js';
 
 const config = {
   clientId: '1544261311787966484',
@@ -34,6 +34,7 @@ test('serves the standalone portal and builds a safe Discord OAuth request', asy
 test('validates server-specific profile images', () => {
   const png = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64')}`;
   assert.equal(validatedAvatarData(png), png);
+  assert.equal(validatedBannerData(png), png);
   assert.equal(validatedAvatarData(null), null);
   assert.throws(() => validatedAvatarData('data:text/plain;base64,SGVsbG8='), /PNG, JPG, or GIF/);
   assert.throws(() => validatedAvatarData('data:image/png;base64,SGVsbG8='), /not a valid image/);
@@ -44,4 +45,11 @@ test('uses a guild avatar before the global bot avatar', () => {
   assert.match(guildBotAvatarUrl('1399834742802747452', member), /guilds\/1399834742802747452\/users\/1544261311787966484\/avatars\/guildhash/);
   member.avatar = null;
   assert.match(guildBotAvatarUrl('1399834742802747452', member), /avatars\/1544261311787966484\/globalhash/);
+});
+
+test('uses a server-specific bot banner when configured', () => {
+  const member = { banner: 'bannerhash', user: { id: '1544261311787966484' } };
+  assert.match(guildBotBannerUrl('1399834742802747452', member), /guilds\/1399834742802747452\/users\/1544261311787966484\/banners\/bannerhash/);
+  member.banner = null;
+  assert.equal(guildBotBannerUrl('1399834742802747452', member), '');
 });

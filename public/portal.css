@@ -252,13 +252,31 @@ header h1 {
   border-radius: 16px;
   background: #110e10;
 }
-.profile-editor > img {
+.profile-stack {
+  display: grid;
+  gap: 18px;
+}
+.profile-editor > img.avatar-preview {
   width: 180px;
   height: 180px;
   object-fit: cover;
   border: 3px solid var(--line);
   border-radius: 50%;
   background: var(--panel2);
+}
+.profile-editor.banner-editor {
+  grid-template-columns: minmax(280px, 1.2fr) minmax(260px, 1fr);
+}
+.profile-editor > img.banner-preview {
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  object-fit: cover;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel2);
+}
+.profile-editor h3 {
+  margin: 0;
 }
 .profile-editor > div {
   display: grid;
@@ -543,7 +561,10 @@ button:disabled {
   .profile-editor {
     grid-template-columns: 1fr;
   }
-  .profile-editor > img {
+  .profile-editor.banner-editor {
+    grid-template-columns: 1fr;
+  }
+  .profile-editor > img.avatar-preview {
     width: 140px;
     height: 140px;
   }

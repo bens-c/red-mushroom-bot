@@ -28,7 +28,7 @@ npm start
 
 The dashboard is a separate service, so the Discord bot and website can run on different servers. It uses the same MongoDB database. A user only sees servers where the bot is installed and their current Discord account has the **Administrator** permission. That permission is checked again through Discord before every saved change.
 
-The dashboard's **Bot profile** tab lets an administrator upload or reset a server-specific bot avatar without changing its image in other servers. PNG, JPG, and GIF images up to 2 MB are accepted.
+The dashboard's **Bot profile** tab lets an administrator upload or reset a server-specific bot avatar and banner without changing its profile in other servers. PNG, JPG, and GIF images are accepted.
 
 1. In Render, choose **New → Blueprint**, connect this GitHub repository, select the **`web` branch**, and let Render read `render.yaml`.
 2. Enter the requested secret values: `CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_TOKEN`, and `MONGODB_URI`.

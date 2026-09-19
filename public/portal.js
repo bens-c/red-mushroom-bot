@@ -152,6 +152,60 @@ avatarReset?.addEventListener('click', async () => {
   finally { avatarReset.disabled = false; }
 });
 
+const bannerInput = document.querySelector('#bot-banner-file');
+const bannerPreview = document.querySelector('#bot-banner-preview');
+const bannerUpload = document.querySelector('#bot-banner-upload');
+const bannerReset = document.querySelector('#bot-banner-reset');
+
+async function updateServerBanner(banner) {
+  const guildId = selectedGuildId();
+  if (!guildId) throw new Error('No server selected.');
+  const response = await fetch(`/api/guilds/${guildId}/profile-banner`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
+    body: JSON.stringify({ banner })
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Profile banner update failed.');
+  if (bannerPreview && result.bannerUrl) bannerPreview.src = `${result.bannerUrl}${result.bannerUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+  notify(result.message);
+}
+
+bannerInput?.addEventListener('change', async () => {
+  const file = bannerInput.files?.[0];
+  if (!file) return;
+  if (!['image/png', 'image/jpeg', 'image/gif'].includes(file.type)) {
+    bannerInput.value = '';
+    return notify('Choose a PNG, JPG, or GIF image.', true);
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    bannerInput.value = '';
+    return notify('The profile banner must be 4 MB or smaller.', true);
+  }
+  try { bannerPreview.src = await readImage(file); }
+  catch (error) { notify(error.message, true); }
+});
+
+bannerUpload?.addEventListener('click', async () => {
+  const file = bannerInput?.files?.[0];
+  if (!file) return notify('Choose a banner first.', true);
+  bannerUpload.disabled = true;
+  try {
+    await updateServerBanner(await readImage(file));
+    bannerInput.value = '';
+  } catch (error) { notify(error.message, true); }
+  finally { bannerUpload.disabled = false; }
+});
+
+bannerReset?.addEventListener('click', async () => {
+  bannerReset.disabled = true;
+  try {
+    await updateServerBanner(null);
+    if (bannerInput) bannerInput.value = '';
+  } catch (error) { notify(error.message, true); }
+  finally { bannerReset.disabled = false; }
+});
+
 window.addEventListener('beforeunload', event => {
   if (!settingForms.some(form => form.dataset.changed === 'true')) return;
   event.preventDefault();

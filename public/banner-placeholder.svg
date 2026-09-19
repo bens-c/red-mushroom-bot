@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" role="img" aria-labelledby="title description">
+  <title id="title">No server banner</title>
+  <desc id="description">Placeholder shown when the bot has no server-specific profile banner.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#27191d"/>
+      <stop offset="1" stop-color="#151114"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="300" rx="24" fill="url(#background)"/>
+  <circle cx="400" cy="126" r="48" fill="#35282d"/>
+  <path d="M378 139h44l-7-31h-30z" fill="#aa9da1"/>
+  <circle cx="400" cy="108" r="24" fill="#aa9da1"/>
+  <text x="400" y="218" fill="#aa9da1" font-family="Arial, sans-serif" font-size="26" text-anchor="middle">No server banner</text>
+</svg>
