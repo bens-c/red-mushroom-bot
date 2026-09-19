@@ -1,6 +1,7 @@
 import {
   ApplicationCommandOptionType,
-  ChannelType
+  ChannelType,
+  PermissionFlagsBits
 } from 'discord.js';
 import { extraCommands } from './extra-commands.js';
 import { staffRolesCommand } from './staff-movements.js';
@@ -216,6 +217,12 @@ export const commands = [
       { type: ApplicationCommandOptionType.Subcommand, name: 'disable', description: 'Return the bot to normal operation' },
       { type: ApplicationCommandOptionType.Subcommand, name: 'status', description: 'Show the current maintenance status' }
     ]
+  },
+  {
+    name: 'customise',
+    description: 'Open this server in the web dashboard',
+    dm_permission: false,
+    default_member_permissions: PermissionFlagsBits.ManageGuild.toString()
   },
   { name: 'help', description: 'Show the bot command guide', dm_permission: false },
   staffRolesCommand,

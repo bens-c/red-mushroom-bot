@@ -245,6 +245,7 @@ async function handleCommand(interaction) {
     if (!globalAccess.allowed) return replyError(interaction, `🛠️ ${getSetting(interaction.guildId, 'maintenance_reason')}`);
   }
   if (interaction.commandName === 'config') return handleConfig(interaction);
+  if (interaction.commandName === 'customise') return handleCustomise(interaction);
   if (interaction.commandName === 'help') return handleHelp(interaction);
   const setup = getSetupState(interaction.guild);
   if (!setup.ready) {
@@ -255,6 +256,29 @@ async function handleCommand(interaction) {
   if (await handleStaffRolesCommand(interaction, { brandEmbed, replyError, isManager })) return;
   if (interaction.commandName === 'announce') return handleAnnouncement(interaction);
   if (await handleExtraCommand(interaction, { brandEmbed, replyError, logEvent, getTextChannel, isManager, isReviewer })) return;
+}
+
+async function handleCustomise(interaction) {
+  if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return replyError(interaction, 'You need Manage Server to open the web dashboard.');
+  const configuredUrl = process.env.WEB_BASE_URL?.trim().replace(/\/+$/, '');
+  let dashboardUrl;
+  try {
+    const parsed = new URL(configuredUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Unsupported protocol');
+    dashboardUrl = new URL(`/dashboard/${interaction.guildId}`, `${parsed.origin}/`).toString();
+  } catch {
+    return replyError(interaction, 'The web dashboard URL is not configured. Set `WEB_BASE_URL` in the bot `.env` file.');
+  }
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setLabel('Open dashboard').setEmoji('⚙️').setStyle(ButtonStyle.Link).setURL(dashboardUrl)
+  );
+  return interaction.reply({
+    embeds: [brandEmbed(interaction.guildId)
+      .setTitle('⚙️ Customise this server')
+      .setDescription('Open the secure web dashboard to configure this server. Discord Administrator permission is checked again when you sign in.')],
+    components: [row],
+    flags: MessageFlags.Ephemeral
+  });
 }
 
 async function handleConfig(interaction) {

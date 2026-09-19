@@ -46,6 +46,7 @@ Each application position has its own name, open/closed state, review channel, s
 ## Commands
 
 - `/config view|set-channel|set-role|set-text|set-option|reset`
+- `/customise` — open the current server directly in the web dashboard
 - `/application panel|stats|position-add|position-toggle|position-remove|positions`
 - `/staff` with hire, promote, demote, transfer, leave, return, resign, and terminate actions
 - `/staff-roles add|remove|list` to trigger movements automatically when watched roles change
