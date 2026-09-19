@@ -35,6 +35,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const GUILD_CACHE_TTL_MS = 15_000;
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const MAX_BANNER_BYTES = 4 * 1024 * 1024;
+const BOT_INVITE_PERMISSIONS = '1099780320374';
 let webServer;
 const guildCache = new Map();
 
@@ -217,17 +218,26 @@ function positionKey(name) {
   return String(name).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
 }
 
+export function botInstallUrl(clientId) {
+  const query = new URLSearchParams({
+    client_id: String(clientId),
+    permissions: BOT_INVITE_PERMISSIONS,
+    scope: 'bot applications.commands'
+  });
+  return `https://discord.com/oauth2/authorize?${query}`;
+}
+
 function layout({ title, content, session = null, guilds = [], currentGuild = null, csrf = '' }) {
   const guildLinks = guilds.map(guild => `<a class="guild-link${guild.id === currentGuild?.id ? ' active' : ''}" href="/dashboard/${guild.id}"><span>${escapeHtml(guild.name.slice(0, 1).toUpperCase())}</span>${escapeHtml(guild.name)}</a>`).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="${escapeHtml(csrf)}"><title>${escapeHtml(title)} · Red Mushroom</title><link rel="stylesheet" href="/portal.css"></head><body>
     <div class="shell">
-      ${session ? `<aside><a class="logo" href="/dashboard"><span>🍄</span><b>Red Mushroom</b></a><nav>${guildLinks || '<p class="muted">No admin servers found.</p>'}</nav><form class="logout api-form" action="/auth/logout" method="post"><button type="submit">Sign out</button></form></aside>` : ''}
+      ${session ? `<aside><a class="logo" href="/dashboard"><span>🍄</span><b>Red Mushroom</b></a>${session.installUrl ? `<a class="add-bot primary" href="${escapeHtml(session.installUrl)}" target="_blank" rel="noopener noreferrer">＋ Add bot</a>` : ''}<nav>${guildLinks || '<p class="muted">No admin servers found.</p>'}</nav><form class="logout api-form" action="/auth/logout" method="post"><button type="submit">Sign out</button></form></aside>` : ''}
       <main class="${session ? '' : 'centered'}">${session ? `<header><div><p class="eyebrow">CONTROL PANEL</p><h1>${escapeHtml(currentGuild?.name || 'Your servers')}</h1></div><div class="user"><img src="${escapeHtml(session.avatarUrl)}" alt=""><span>${escapeHtml(session.username)}</span></div></header>` : ''}${content}</main>
     </div><div id="save-bar" role="status" aria-live="polite"><div><strong>Unsaved changes</strong><span>Your new configuration is ready to save.</span></div><button id="save-all" class="primary" type="button">Save changes</button></div><div id="toast" role="status" aria-live="polite"></div><script src="/portal.js" defer></script></body></html>`;
 }
 
 function loginPage(clientId) {
-  return layout({ title: 'Sign in', content: `<section class="login-card"><div class="mushroom">🍄</div><p class="eyebrow">RED MUSHROOM BOT</p><h1>One dashboard.<br>Every server setting.</h1><p>Sign in with Discord to manage servers where you have Administrator permission.</p><a class="primary" href="/auth/discord">Continue with Discord</a><div class="security-note"><span>◆</span> Permissions are checked live on every change.</div></section><p class="login-foot">Application ${escapeHtml(clientId)}</p>` });
+  return layout({ title: 'Sign in', content: `<section class="login-card"><div class="mushroom">🍄</div><p class="eyebrow">RED MUSHROOM BOT</p><h1>One dashboard.<br>Every server setting.</h1><p>Sign in with Discord to manage servers where you have Administrator permission.</p><a class="primary" href="/auth/discord">Continue with Discord</a><a class="install-link" href="${escapeHtml(botInstallUrl(clientId))}" target="_blank" rel="noopener noreferrer">＋ Add bot to Discord</a><div class="security-note"><span>◆</span> Permissions are checked live on every change.</div></section><p class="login-foot">Application ${escapeHtml(clientId)}</p>` });
 }
 
 function selectOptions(items, selected, emptyLabel) {
@@ -289,6 +299,7 @@ export function createWebPortalApp(config = {}) {
   if (!clientId || !clientSecret || !botToken || !sessionSecret || !baseUrl) throw new Error('Web portal requires CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_TOKEN, SESSION_SECRET, and WEB_BASE_URL.');
   if (sessionSecret.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters.');
   const portalConfig = { clientId, clientSecret, botToken, sessionSecret, baseUrl };
+  const installUrl = botInstallUrl(clientId);
   const secureCookies = baseUrl.startsWith('https://');
   const app = express();
   if (process.env.WEB_TRUST_PROXY === 'true') app.set('trust proxy', 1);
@@ -355,14 +366,14 @@ export function createWebPortalApp(config = {}) {
   app.get('/dashboard', async (request, response) => {
     const guilds = await adminGuilds(request.portalSession, portalConfig, { useCache: true });
     if (guilds[0]) return response.redirect(`/dashboard/${guilds[0].id}`);
-    response.send(layout({ title: 'Dashboard', session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url }, csrf: request.portalSession.csrf, content: '<section class="empty-state"><div>🔐</div><h2>No manageable servers</h2><p>You need Discord Administrator permission on a server where Red Mushroom Bot is installed.</p></section>' }));
+    response.send(layout({ title: 'Dashboard', session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url, installUrl }, csrf: request.portalSession.csrf, content: '<section class="empty-state"><div>🔐</div><h2>No manageable servers</h2><p>You need Discord Administrator permission on a server where Red Mushroom Bot is installed. Use <strong>Add bot</strong> to install it first.</p></section>' }));
   });
   app.get('/dashboard/:guildId', async (request, response) => {
     const guilds = await adminGuilds(request.portalSession, portalConfig, { useCache: true });
     const guild = await requireGuildAdmin(request.portalSession, request.params.guildId, portalConfig, guilds);
-    if (!guild) return response.status(403).send(layout({ title: 'Access denied', session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url }, guilds, csrf: request.portalSession.csrf, content: '<section class="empty-state"><div>⛔</div><h2>Access denied</h2><p>Administrator permission is required.</p></section>' }));
+    if (!guild) return response.status(403).send(layout({ title: 'Access denied', session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url, installUrl }, guilds, csrf: request.portalSession.csrf, content: '<section class="empty-state"><div>⛔</div><h2>Access denied</h2><p>Administrator permission is required.</p></section>' }));
     const positions = await getCollection('application_categories').find({ guild_id: guild.id }).sort({ name: 1 }).toArray();
-    response.send(layout({ title: guild.name, session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url }, guilds, currentGuild: guild, csrf: request.portalSession.csrf, content: guildDashboard(guild, getAllSettings(guild.id), positions) }));
+    response.send(layout({ title: guild.name, session: { username: request.portalSession.username, avatarUrl: request.portalSession.avatar_url, installUrl }, guilds, currentGuild: guild, csrf: request.portalSession.csrf, content: guildDashboard(guild, getAllSettings(guild.id), positions) }));
   });
 
   app.use('/api/guilds/:guildId', async (request, response, next) => {

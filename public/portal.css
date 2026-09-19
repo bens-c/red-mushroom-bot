@@ -54,6 +54,11 @@ aside {
 .logo span {
   font-size: 28px;
 }
+.add-bot {
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 11px 12px;
+}
 nav {
   display: grid;
   gap: 7px;
@@ -452,6 +457,21 @@ button:disabled {
   margin: 14px 0;
   width: 100%;
   padding: 13px;
+}
+.install-link {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  text-align: center;
+  text-decoration: none;
+  font-weight: 750;
+}
+.install-link:hover {
+  border-color: #72505a;
+  background: var(--panel2);
 }
 .security-note {
   margin-top: 18px;

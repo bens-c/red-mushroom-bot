@@ -30,6 +30,8 @@ The dashboard is a separate service, so the Discord bot and website can run on d
 
 The dashboard's **Bot profile** tab lets an administrator upload or reset a server-specific bot avatar and banner without changing its profile in other servers. PNG, JPG, and GIF images are accepted.
 
+The **Add bot** button opens Discord's official guild-install flow with the bot and application-command scopes plus the permissions required by the enabled modules.
+
 1. In Render, choose **New → Blueprint**, connect this GitHub repository, select the **`web` branch**, and let Render read `render.yaml`.
 2. Enter the requested secret values: `CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_TOKEN`, and `MONGODB_URI`.
 3. Render generates `SESSION_SECRET` automatically and derives the website URL from its hostname. If you later use a custom domain, set `WEB_BASE_URL` manually to that domain without a trailing slash.

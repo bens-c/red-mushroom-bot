@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createWebPortalApp, guildBotAvatarUrl, guildBotBannerUrl, validatedAvatarData, validatedBannerData } from '../src/web-portal.js';
+import { botInstallUrl, createWebPortalApp, guildBotAvatarUrl, guildBotBannerUrl, validatedAvatarData, validatedBannerData } from '../src/web-portal.js';
 
 const config = {
   clientId: '1544261311787966484',
@@ -21,7 +21,9 @@ test('serves the standalone portal and builds a safe Discord OAuth request', asy
 
   const login = await fetch(`http://127.0.0.1:${port}/`);
   assert.equal(login.status, 200);
-  assert.match(await login.text(), /Continue with Discord/);
+  const loginHtml = await login.text();
+  assert.match(loginHtml, /Continue with Discord/);
+  assert.match(loginHtml, /Add bot to Discord/);
 
   const oauth = await fetch(`http://127.0.0.1:${port}/auth/discord`, { redirect: 'manual' });
   const location = new URL(oauth.headers.get('location'));
@@ -29,6 +31,15 @@ test('serves the standalone portal and builds a safe Discord OAuth request', asy
   assert.equal(location.searchParams.get('scope'), 'identify guilds');
   assert.equal(location.searchParams.get('redirect_uri'), 'https://dashboard.example.com/auth/callback');
   assert.match(oauth.headers.get('set-cookie'), /rm_oauth=.*HttpOnly.*SameSite=Lax.*Secure/);
+});
+
+test('builds a Discord guild-install link with bot commands', () => {
+  const location = new URL(botInstallUrl(config.clientId));
+  assert.equal(location.origin, 'https://discord.com');
+  assert.equal(location.pathname, '/oauth2/authorize');
+  assert.equal(location.searchParams.get('client_id'), config.clientId);
+  assert.equal(location.searchParams.get('scope'), 'bot applications.commands');
+  assert.match(location.searchParams.get('permissions'), /^\d+$/);
 });
 
 test('validates server-specific profile images', () => {
